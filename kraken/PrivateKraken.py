@@ -55,7 +55,7 @@ def authenticate(account_info, data):
     if not res['error']:
         return res['result']
     else:
-        return res['error']
+        raise Exception(res['error'])
 
 def get_balance(asset=None):
     # returns to the user the balance of all accounts in Kraken

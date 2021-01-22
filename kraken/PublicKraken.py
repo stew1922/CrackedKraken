@@ -88,6 +88,7 @@ def pair_matching(trading_pair):
     if not res['error']:
         if trading_pair.upper() == 'BTCUSD':
             return 'XXBTZUSD'
+            
         # check to see if 'trading_pair' is a list or not
         if type(trading_pair) == list:
             # check to see if each 'trading_pair' is already a valid Kraken pair
@@ -204,7 +205,7 @@ def get_asset_info(asset=None):
                 return res['result']
             
         else:
-            return f"Error Message: {res['error']}"
+            raise Exception(f"Error Message: {res['error']}")
 
 def get_fees(pair, maker_taker=None, volume=None):
     # return a dictionary of a dictionary of the fees associated with the provided pair
@@ -269,7 +270,7 @@ def get_fees(pair, maker_taker=None, volume=None):
         return fees
 
     else:
-        return f"Error Message: {res['error']}"
+        raise Exception( f"Error Message: {res['error']}")
 
 def get_pair_trade_data(pair):
     # returns all the trade info for the given pair
@@ -303,7 +304,7 @@ def get_pair_trade_data(pair):
     if not res['error']:
         return res['result'][pair]
     else:
-        return f"Error Message: {res['error']}"
+        raise Exception(f"Error Message: {res['error']}")
 
 def get_ticker_info(pair):
     # returns the current order book level one for a given pair, or list of pairs
@@ -320,13 +321,13 @@ def get_ticker_info(pair):
     if not res['error']:
         return res['result']
     else:
-        return f"Error Message: {res['error']}"
+        raise Exception( f"Error Message: {res['error']}")
 
 def get_ohlc(pair, interval=None, since=None):
     # returns the last 720 iterations of periods that you feed it, i.e.- default is minutes, so you would recieve the last 720 minutes. If you input 'D' you would get the last 720 days on a daily timescale.
     '''
     -Inputs: valid Kraken trading pair name, wsname, or alternative name.
-        * Optionally, takes 'interval' which is the time frame interval.
+        * Optionally, takes 'interval' which is the time frame interval (can take string or int -- for the 1 minute interval, you can enter either '1' or 'min').
         * Optionally, takes 'since' which is the unix timestamp from which to start the data pull (Kraken limits you to 720 iterations)
     -Returns: a dictionary of a dictionaries with the format: 
     {timestamp1: 
@@ -356,10 +357,14 @@ def get_ohlc(pair, interval=None, since=None):
     }
 
     if type(interval) == int:
+        if interval not in interval_dict.values():
+            raise Exception(f'{interval} not a valid input.  Only 1, 60, 240, 1440, 10080, or 21600 accepted as integers.')
         interval = interval
     elif interval==None:
         interval = None
     else:
+        if interval not in interval_dict.keys():
+            raise Exception(f'{interval} not a valid input.  Only "min", "1h", "4h", "D", "W" and "15D" accepted as strings.')
         interval = interval_dict[interval.upper()]
     
     url = 'https://api.kraken.com/0/public/OHLC'
@@ -408,7 +413,7 @@ def get_ohlc(pair, interval=None, since=None):
 
         return converter_dict
     else:
-        return f"Error Message: {res['error']}"
+        raise Exception(f"Error Message: {res['error']}")
 
 def get_ohlc_dataframe(pair, interval=None, since=None):
     # similar to get_ohlc, except returns a dataframe instead of a dictionary of dictionaries
@@ -422,7 +427,8 @@ def get_ohlc_dataframe(pair, interval=None, since=None):
     
     data = get_ohlc(pair, interval, since)
     if 'Error Message' in data:
-        return data
+        raise Exception(data)
+
     df = pd.DataFrame(data).T
     df.index = pd.to_datetime(df.index, unit='s')
 
@@ -454,7 +460,7 @@ def get_order_book(pair, count=None):
     if not res['error']:
         return res['result'][pair]
     else:
-        return f"Error Message: {res['error']}"
+        raise Exception(f"Error Message: {res['error']}")
 
 def get_asks(pair, count=None):
     # returns only the asks for a selected pair
@@ -464,8 +470,7 @@ def get_asks(pair, count=None):
     -Returns: a list of list of each ask -- [[price, volume, timestamp]]
     '''
     pair = pair_matching(pair)
-    if 'Error Message' in pair:
-        return pair
+
     asks = get_order_book(pair, count)
 
     return asks['asks']
@@ -478,8 +483,7 @@ def get_bids(pair, count=None):
     -Returns: a list of list of each bid -- [[price, volume, timestamp]]
     '''
     pair = pair_matching(pair)
-    if 'Error Message' in pair:
-        return pair
+
     bids = get_order_book(pair, count)
 
     return bids['bids']
@@ -491,8 +495,7 @@ def get_current_bid(pair):
     -Returns: a list of current bid info -- [price, volume, timestamp]
     '''
     pair = pair_matching(pair)
-    if 'Error Message' in pair:
-        return pair
+
     bid = get_order_book(pair)
 
     return bid['bids'][0]
@@ -504,8 +507,7 @@ def get_current_ask(pair):
     -Returns: a list of current ask info -- [price, volume, timestamp]
     '''
     pair = pair_matching(pair)
-    if 'Error Message' in pair:
-        return pair
+    
     ask = get_order_book(pair)
 
     return ask['asks'][0]
