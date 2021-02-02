@@ -10,7 +10,6 @@ Repository for using Kraken's Public and Private APIs
 * KrakenWS - handles the websocket connection
     * ***NOTE: the websocket portion is still in development***
 
-<<<<<<< HEAD
 Example code:
 
 * Creating an OHLC dataframe:
@@ -20,8 +19,4 @@ Example code:
 * Pulling in trade history:
 `from kraken import PrivateKraken`
 `trade_history = PrivateKraken().get_trade_history(type='closed position')`
-=======
-### must have a '.env' file saved with your Kraken API info with the following parameters:
-   * `kraken_api="PUBLIC KRAKEN KEY"`
-   * `kraken_private_key="PRIVATE KRAKEN KEY"`
->>>>>>> 10a9962985afe46ef49ee785bd7616441524c45f
+
