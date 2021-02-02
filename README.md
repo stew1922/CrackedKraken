@@ -12,11 +12,11 @@ Repository for using Kraken's Public and Private APIs
 
 Example code:
 
-* Creating an OHLC dataframe:
-`from kraken import PublicKraken`
-`eth_df = PublicKraken().get_ohlc_dataframe('ethusd')`
+* Creating an OHLC dataframe:  
+`from kraken import PublicKraken`  
+`eth_df = PublicKraken().get_ohlc_dataframe('ethusd')`  
 
-* Pulling in trade history:
-`from kraken import PrivateKraken`
-`trade_history = PrivateKraken().get_trade_history(type='closed position')`
+* Pulling in trade history:  
+`from kraken import PrivateKraken`  
+`trade_history = PrivateKraken().get_trade_history(type='closed position')`  
 
