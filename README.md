@@ -1,9 +1,9 @@
 # CrackedKraken
 Repository for using Kraken's Public and Private APIs  
-Current version = v2.0
+Current version = v0.2.0
 
 ## Updates:
-   * 02/02/2021 - released v2.0
+   * 02/02/2021 - released v0.2.0
       * release notes:
          * Refactored and Cleaned the code base
          * Got rid of different .py files for PrivateKraken, PublicKraken and KrakenWS and combined them all in one
