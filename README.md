@@ -16,7 +16,7 @@ Current version = v0.2.0
     * must have your private and public keys from Kraken saved in a .env file as the following:
         * kraken_api="PUBLIC KRAKEN KEY"
         * kraken_private_key="PRIVATE KRAKEN KEY"  
-        Where the string inside the quotes are your keys.
+      (Where the string inside the quotes are your keys)
     * The .env file must be in the same directory as this code base, or above.  
 * KrakenWS - handles the websocket connection
     * ***NOTE: the websocket portion is still in development***
