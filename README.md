@@ -22,7 +22,7 @@ Current version = v2.0
 Example code:
 
 * Creating an OHLC dataframe:  
-`from kraken import PublicKraken`  
+`from kraken import PublicKraken`
 `eth_df = PublicKraken().get_ohlc_dataframe('ethusd')`  
 
 * Pulling in trade history:  
