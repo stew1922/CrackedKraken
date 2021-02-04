@@ -63,6 +63,10 @@ class PublicKraken:
 
     def make_api_data(self, asset=None, aclass=None, trades=None, userref=None, start=None, end=None, ofs=None, closetime=None, type=None, txid=None, consolidation=None, docalcs=None, pair=None, fee_info=None, ordertype=None, price=None, price2=None, volume=None, leverage=None, oflags=None, starttm=None, expiretm=None, validate=None, since=None, info=None):
         # simple function that will create the 'data' dictionary that will be used to pass information into any api calls
+        # will be used only as a helper function and doesn't really need to be called on its own.
+        # if you write any new functions, the inputs must be added as an argument to this function with a default value of 'None'
+            # as long as the argument value is 'None' the data will not be included in the data package, only once the argument value is something other than 'None'
+            # IF anyone has a better idea on how to handle this so that the argument list for this function is not as long, please make a fork and pull request with your solution (or let me know)
         data = {arg: value for arg, value in locals().items() if arg != 'endpoint' and arg != 'url' and arg != 'method' and value is not None and value != False}
 
         return data
@@ -275,11 +279,11 @@ class PublicKraken:
 
         # if pair and/or info is passed as an argument send that in the API request package
         if pair != None and info != 'info':
-            data = PrivateKraken().make_api_data(pair=pair, info=info)
+            data = self.make_api_data(pair=pair, info=info)
         elif pair != None and info == 'info':
-            data = PrivateKraken().make_api_data(pair=pair)
+            data = self.make_api_data(pair=pair)
         elif pair == None and info != 'info':
-            data = PrivateKraken().make_api_data(info=info)
+            data = self.make_api_data(info=info)
         else:
             data = {}
 
