@@ -17,18 +17,18 @@ Current version = v0.2.0
          * KrakenWS is still under development
 
 ## Classes -- ***Full documentation coming soon***
-#### PublicKraken
+#### - PublicKraken
 * get_status
 * get_asset_info
 
-#### PrivateKraken - handles all the private API calls
+#### - PrivateKraken
     Must have your private and public keys from Kraken saved in a .env file as the following:
         - kraken_api="<PUBLIC KRAKEN KEY>"
         - kraken_private_key="<PRIVATE KRAKEN KEY>"  
     The .env file MUST be in the same directory as this code base, or above it as the code utilizes load_dotenv() to read the file.  
 * get_balance
 
-#### KrakenWS - handles the websocket connection
+#### - KrakenWS
     ***NOTE: the websocket portion is still in development***
 
 
