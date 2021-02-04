@@ -5,6 +5,7 @@ Current version = v0.2.0
 ## Table of Contents
 * [Updates](#Updates)
 * [Classes](#Classes)
+* [Example Code](#Example-Code)
 * [References](#References)
 
 ## Updates:
@@ -28,7 +29,7 @@ Current version = v0.2.0
     * ***NOTE: the websocket portion is still in development***
 
 
-## Example code
+## Example Code
 #### Creating an OHLC dataframe
     from kraken import PublicKraken
     eth_df = PublicKraken().get_ohlc_dataframe('ethusd')
