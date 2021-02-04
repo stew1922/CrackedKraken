@@ -16,7 +16,7 @@ Current version = v0.2.0
          * Created 3 classes - PublicKraken, PrivateKraken and KrakenWS
          * KrakenWS is still under development
 
-## Classes
+## Classes -- ***Full documentation coming soon***
 ### PublicKraken
 
 * PrivateKraken - handles all the private API calls
