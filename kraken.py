@@ -4,18 +4,22 @@ import requests, urllib
 from dotenv import load_dotenv
 import hmac, base64, hashlib
 import time
-import json
-import requests
 import pandas as pd
 import websocket
+import sqlite3
+from pathlib import Path
 
 # load the .env file that your Kraken keys are stored in (must be at or above this library level)
 load_dotenv()
 
 class PublicKraken:
+    '''
+    Takes 'asset' which is either a single currency (i.e.- ETH, XETH, usd, etc.) or a trading pair (i.e.- ETHUSD, btcusd, LTC/eth, etc.).
+    Can be a single entry, or a list of entries.
+    '''
 
-    def __init__(self):
-        self = self
+    def __init__(self, asset=None):
+        self.asset = asset
 
     def get_server_time(self, unix=True):
         # display Kraken's server time
@@ -71,22 +75,21 @@ class PublicKraken:
 
         return data
 
-    def name_converter(self, asset):
+    def name_converter(self):
         # Function that converts asset names into Kraken compatible names.
         # Kraken uses the X-ISO4217-A3 system to name their assets.
         # See https://github.com/globalcitizen/x-iso4217-a3 for more info
         # this will mainly be used as a helper function within other functions to minimize naming convention errors
         '''
-        args:
-            - Any Kraken ticker or common ticker symbol, i.e.- 'btc', 'XBT', etc.
-
         returns:
             - The valid Kraken X-ISO4217-A3 ticker.
         '''
+        if self.asset is None:
+            raise Exception(f'No asset provided to PublicKraken instantiation.  Please provide an asset.')
 
         url = 'https://api.kraken.com/0/public/Assets'
         res = requests.get(url).json()
-        asset = asset.upper()
+        asset = self.asset.upper()
 
         if not res['error']:
             cryptos = {}
@@ -112,19 +115,20 @@ class PublicKraken:
         else:
             raise Exception({'kraken_error': f"Error Message: {res['error']}"})
 
-    def pair_matching(self, trading_pair):
+    def pair_matching(self):
         # takes in wsname or altname and returns the Kraken pair name
         # this will mainly be used as a helper function within other functions to minimize naming convention errors
         '''
-        args:
-            - 'trading-pair' = any pair name, i.e.- 'ethusd', 'XETHZUS', 'eth/USD', etc
-
         returns:
             - A valid Kraken recognized trading pair
         '''
+        if self.asset is None:
+            raise Exception(f'No asset provided to PublicKraken instantiation.  Please provide an asset.')
 
         url = 'https://api.kraken.com/0/public/AssetPairs'
         res = requests.get(url).json()
+
+        trading_pair = self.asset
         
         if not res['error']:
             if trading_pair.upper() == 'BTCUSD':
@@ -237,12 +241,10 @@ class PublicKraken:
         else:
             raise Exception({'kraken_error': f'Error Message: {message["error"]}'})
 
-    def get_pair_info(self, pair=None, info='info'):
+    def get_pair_info(self, info='info'):
         '''
         args:
-            *Optional: a valid Kraken trading pair, wsname or altname.  Use 'get_asset_pairs' for a list of pairs that are available.
-                - Default is to return ALL available pairs.
-            *Optional: info to be returned
+            *Optional: info = information to be returned
                 - Default is to return ALL available info.
                 - Other options include: 'leverage', 'fees', 'margin'
 
@@ -273,9 +275,11 @@ class PublicKraken:
 
         url = 'https://api.kraken.com/0/public/AssetPairs'
 
-        # if a pair ha been provided, convert the pair name to a valid Kraken traing pair format
-        if pair != None:
-            pair = self.pair_matching(pair)
+        # if a pair has been provided, convert the pair name to a valid Kraken traing pair format
+        if self.asset != None:
+            pair = self.pair_matching()
+        else:
+            pair = self.asset
 
         # if pair and/or info is passed as an argument send that in the API request package
         if pair != None and info != 'info':
@@ -296,7 +300,7 @@ class PublicKraken:
         else:
             raise Exception({'kraken_error': f'Error Message: {message["error"]}'})
 
-    def get_asset_info(self, asset=None):
+    def get_asset_info(self):
             # find all the info for a certain asset
             # info includes:
                 # 'altname' = alternative name, ie: XETH --> ETH
@@ -304,10 +308,6 @@ class PublicKraken:
                 # 'decimals' = scaling decimal places for record keeping
                 # 'display_decimals' = scaling decimal places for output display
             '''
-            args:
-                *Optional: 'asset' is the asset to return data for
-                    - Default is set to 'None' which will return all assets on Kraken.
-
             returns:
                 - A dictionary of asset info.
             '''
@@ -315,32 +315,29 @@ class PublicKraken:
             url = 'https://api.kraken.com/0/public/Assets'
             res = requests.get(url).json()
 
+            asset = self.asset
+
             if not res['error']:
                 if asset != None:
-                    asset = asset.upper()
-                    try: 
-                        return res['result'][asset]
-
-                    except KeyError: 
-                        return self.name_converter(asset)
-
+                    asset = self.name_converter()
+                    return res['result'][asset] 
+                        
                 else:
                     return res['result']
                 
             else:
                 raise Exception({'kraken_error': f'Error Message: {res["error"]}'})
 
-    def get_fees(self, pair, maker_taker=None, volume=None):
+    def get_fees(self, maker_taker=None, volume=None):
         # return a dictionary of a dictionary of the fees associated with the provided pair
         # {'taker': {volume1: fee1, volume2: fee2}, 'maker': {volume1: fee1, volume2: fee2}}
         # if your monthly volume is equal to OR more than the listed volume, then the associated fee is your fee in percent
         '''
         args:
-            - Valid trading pair's Kraken name, wsname or alternative name. 
-                * Optional: 'maker_taker' which can be either 'maker' or 'taker'.  If neither are provided, both fee tiers are returned.
-                    - Default is set to 'None'
-                * Optional: 'volume' which is the user's volume in $.  If none is provided, all tiers are returned.
-                    - Default is set to 'None'
+            * Optional: 'maker_taker' which can be either 'maker' or 'taker'.  If neither are provided, both fee tiers are returned.
+                - Default is set to 'None'
+            * Optional: 'volume' which is the user's volume in $.  If none is provided, all tiers are returned.
+                - Default is set to 'None'
                 
         returns:
             - A dictionary of taker and maker fee tiers.  Volume is given in $ amount and fees are given in percents.
@@ -349,7 +346,7 @@ class PublicKraken:
         url = 'https://api.kraken.com/0/public/AssetPairs'
         res = requests.get(url).json()
 
-        pair = self.pair_matching(pair)
+        pair = self.pair_matching()
 
         if not res['error']:
             fees = {}
@@ -401,7 +398,7 @@ class PublicKraken:
         else:
             raise Exception({'kraken_error': f"Error Message: {res['error']}"})
 
-    def get_pair_trade_data(self, pair):
+    def get_pair_trade_data(self):
         # returns all the trade info for the given pair
             # altname = alternate pair name
             # wsname = WebSocket pair name (if available)
@@ -422,8 +419,6 @@ class PublicKraken:
             # margin_stop = stop-out/liquidation margin level
             # ordermin = minimum order volume for pair
         '''
-        args:
-            - Valid trading pair's Kraken name, wsname or alternative name.
         returns:
             - A dictionary of trade data for the given pair.
         ''' 
@@ -431,24 +426,22 @@ class PublicKraken:
         url = 'https://api.kraken.com/0/public/AssetPairs'
         res = requests.get(url).json()
 
-        pair = self.pair_matching(pair)
+        pair = self.pair_matching()
 
         if not res['error']:
             return res['result'][pair]
         else:
             raise Exception(f"Error Message: {res['error']}")
 
-    def get_ticker_info(self, pair):
+    def get_ticker_info(self):
         # returns the current order book level one for a given pair, or list of pairs
             # NOTICE: it appears that, for the time being, the Kraken API only returns the alphabetically last pair data when passing a list of pairs as an argument
         '''
-        args:
-            - Valid trading pair's Kraken name, wsname or alternative name.
         returns:
             - A dicitonary of dictionaries of ticker data: ask, bid, last trade, volume, volume weighted average price, number of trades, low, high, open
         '''
         url = 'https://api.kraken.com/0/public/Ticker'
-        pair = self.pair_matching(pair)
+        pair = self.pair_matching()
         params = {'pair': pair}
         res = requests.get(url, params).json()
         
@@ -457,13 +450,13 @@ class PublicKraken:
         else:
             raise Exception({'kraken_error': f"Error Message: {res['error']}"})
 
-    def get_ohlc(self, pair, interval=None, since=None):
+    def get_ohlc(self, interval=None, since=None):
         # returns the last 720 iterations of periods that you feed it, i.e.- default is minutes, so you would recieve the last 720 minutes. If you input 'D' you would get the last 720 days on a daily timescale.
+        # if more data is needed, utilize the ohlc_df function in data.py
         '''
         args:
-            - Valid Kraken trading pair name, wsname, or alternative name.
-                * Optional: 'interval' which is the time frame interval (can take string or int -- for the 1 minute interval, you can enter either '1' or 'min').
-                * Optional: 'since' which is the unix timestamp from which to start the data pull (Kraken limits you to 720 previous iterations)
+            * Optional: 'interval' which is the time frame interval (can take string or int -- for the 1 minute interval, you can enter either '1' or 'min').
+            * Optional: 'since' which is the unix timestamp from which to start the data pull (Kraken limits you to 720 iterations)
         returns: 
             - A dictionary of a dictionaries with the format: 
                 {timestamp1: 
@@ -504,30 +497,14 @@ class PublicKraken:
             interval = interval_dict[interval.upper()]
         
         url = 'https://api.kraken.com/0/public/OHLC'
-        pair = self.pair_matching(pair)
+        pair = self.pair_matching()
 
-        if interval==None and since==None:
-            params = {
-                'pair': pair
-            }
+        params = {
+            'pair': pair,
+            'interval': interval,
+            'since': since}
 
-        elif interval==None:
-            params = {
-                'pair': pair,
-                'since': since
-            }
-
-        elif since==None:
-            params = {
-                'pair': pair,
-                'interval': interval
-            }
-        else:
-            params = {
-                'pair': pair,
-                'interval': interval,
-                'since': since
-            }
+        print(params)
 
         res = requests.get(url, params).json()
         if not res['error']:
@@ -550,42 +527,44 @@ class PublicKraken:
         else:
             raise Exception({'kraken_error': f"Error Message: {res['error']}"})
 
-    def get_ohlc_dataframe(self, pair, interval=None, since=None):
+    def get_ohlc_dataframe(self, interval=None, since=None):
         # similar to get_ohlc, except returns a dataframe instead of a dictionary of dictionaries
         '''
         Similar to 'get_ohlc', except returns a dataframe instead of a dictionary of dictionaries.
+            Note: if more data is needed, utilized the ohlcv_df() function on data.py
         
         args:
-            - Valid Kraken trading pair name, wsname, or alternative name.
-                * Optional: 'interval' which is the time frame interval.
-                    - Default is set to 'None' and returns a 1 minute interval (?)
-                * Optional: 'since' which is the unix timestamp from which to start the data pull (Kraken limits you to 720 iterations)
-                    - Default is set to 'None' and returns the previous 720 interations
+            * Optional: 'interval' which is the time frame interval.
+                - Default is set to 'None' and returns a 1 minute interval
+            * Optional: 'since' which is the unix timestamp from which to start the data pull (Kraken limits you to 720 iterations)
+                - Default is set to 'None' and returns the next 720 interations
 
         returns: 
-            - A pandas dataframe with a datetime index and columns 'open', 'high', 'low', 'close', 'vwap', 'volume', 'count'
+            - A pandas dataframe with a timestamp index and columns 'date', 'open', 'high', 'low', 'close', 'volume', 'trade_count', 'vwap'
         '''
         
-        data = self.get_ohlc(pair, interval, since)
+        data = self.get_ohlc(interval, since)
 
         df = pd.DataFrame(data).T
-        df.index = pd.to_datetime(df.index, unit='s')
+        df['date'] = pd.to_datetime(df.index, unit='s')
+
+        df.rename(columns={'count':'trade_count'}, inplace=True)
+        
+        df = df[['date', 'open', 'high', 'low', 'close', 'volume', 'trade_count', 'vwap']]
 
         return df
 
-    def get_order_book(self, pair, count=None):
+    def get_order_book(self, count=None):
         # function that will return a dictionary of dictionaries of the asks and bids
         '''
-        args:
-         - Valid trading pair's Kraken name, wsname or alternative name.
-            * Optional: 'count' which is the maximium number of bids/asks.  
-                - By default set to 'None' which returns all bids/asks.
+        * Optional: 'count' which is the maximium number of bids/asks.  
+            - By default set to 'None' which returns all bids/asks.
 
         returns: 
             - A dictionary of dictionaries of bids and asks.
         '''
 
-        pair = self.pair_matching(pair)
+        pair = self.pair_matching()
 
         url = 'https://api.kraken.com/0/public/Depth'
         if count==None:
@@ -605,91 +584,76 @@ class PublicKraken:
         else:
             raise Exception({'kraken_error': f"Error Message: {res['error']}"})
 
-    def get_asks(self, pair, count=None):
+    def get_asks(self, count=None):
         # returns only the asks for a selected pair
         '''
         args:
-            - Valid trading pair's Kraken name, wsname or alternative name.
-                *Optional: 'count' which is the maximum number of asks to return.
-                    - Default is set to 'None' which returns all asks.
+            *Optional: 'count' which is the maximum number of asks to return.
+                - Default is set to 'None' which returns all asks.
 
         returns: 
             - A list of list of each ask -- [[price, volume, timestamp]]
         '''
-        pair = self.pair_matching(pair)
-
-        asks = self.get_order_book(pair, count)
+        asks = self.get_order_book(count)
 
         return asks['asks']
 
-    def get_bids(self, pair, count=None):
+    def get_bids(self, count=None):
         # returns only the bids for a selected pair
         '''
         args:
-            - Valid trading pair's Kraken name, wsname or alternative name.
-                * Optional: 'count' which is the maximum number of bids to return.
-                    - By Default, set to 'None' which returns all bids
+            * Optional: 'count' which is the maximum number of bids to return.
+                - By Default, set to 'None' which returns all bids
 
         -Returns: a list of list of each bid -- [[price, volume, timestamp]]
         '''
-        pair = self.pair_matching(pair)
-
-        bids = self.get_order_book(pair, count)
+        bids = self.get_order_book(count)
 
         return bids['bids']
 
-    def get_current_bid(self, pair):
+    def get_current_bid(self):
         # returns the current bid for a selected pair
         '''
-        args:
-            - Valid trading pair's Kraken name, wsname or alternative name.
-
         returns: 
             - A list of current bid info -- [price, volume, timestamp]
         '''
-        pair = self.pair_matching(pair)
-
-        bid = self.get_order_book(pair)
+        bid = self.get_order_book()
 
         return bid['bids'][0]
 
-    def get_current_ask(self, pair):
+    def get_current_ask(self):
         # returns the current bid for a selected pair
         '''
-        args:
-            - Valid trading pair's Kraken name, wsname or alternative name.
-
         returns: 
             - A list of current ask info -- [price, volume, timestamp]
         '''
-        pair = self.pair_matching(pair)
-
-        ask = self.get_order_book(pair)
+        ask = self.get_order_book()
 
         return ask['asks'][0]
 
-    def get_leverage_data(self, pair, type):
+    def get_leverage_data(self, side=None):
         '''
         args:
-            - pair = the trading pair to lookup leverage information for
-            - type = whether it is buy-side or sell-side leverage (i.e.- long or short)
+            *Optional: side = whether it is buy-side or sell-side leverage (i.e.- long or short)
+                - Default is set to None and returns both buy and sell side leverage
 
         returns: 
-            - A list of all available leverage options for that asset.
+            - A dictionary or list of all available leverage options for that asset.
         '''
-
-        leverage = self.get_pair_trade_data(pair)[f'leverage_{type}']
+        if side == None:
+            leverage = {'buy': self.get_pair_trade_data()['leverage_buy'], 'sell': self.get_pair_trade_data()['leverage_buy']}
+        else:
+            leverage = self.get_pair_trade_data()[f'leverage_{side}']
 
         return leverage
 
-    def get_historical_data(self, pair, start_time=None):
+    def get_historical_data(self, start_time=None):
 
         '''
         args:
-            - pair = trading pair to pull historical data for.
-                *Optional: start_time = time from which to begin pulling historical data
-                    - By default, set to 'None' and returns the previous 720 trades
-                    - start_time = 0 is a special case that will pull trade history from the genesis of trading that asset on Kraken.
+            *Optional: start_time = time from which to begin pulling historical data
+                - By default, set to 'None' and returns the previous 720 trades
+                - start_time = 0 is a special case that will pull trade history from the genesis of trading that asset on Kraken.
         returns:
             - A pandas dataframe of every trade.
         '''
@@ -698,7 +662,7 @@ class PublicKraken:
         # start_time must be in str format
 
         # be sure 'pair' is a Kraken recognized trading pair, i.e.- XETHZUSD
-        pair = self.pair_matching(pair)
+        pair = self.pair_matching()
 
         # subscribe to the 'Trades' endpoint
         url = 'https://api.kraken.com/0/public/Trades'
@@ -817,8 +781,8 @@ class PublicKraken:
 
 class PrivateKraken:
 
-    def __init__(self):
-        self = self
+    def __init__(self, asset=None):
+        self.asset = asset
 
         # set an api key variable that will be used to authenticate your account
         krakenapi = os.getenv('kraken_api')
@@ -868,7 +832,7 @@ class PrivateKraken:
         else:
             raise Exception({'kraken_error': f"Error Message: {res['error']}"})
 
-    def get_balance(self, asset=None):
+    def get_balance(self):
         # returns to the user the balance of all accounts in Kraken
         '''
         args:
@@ -878,13 +842,13 @@ class PrivateKraken:
         returns: 
             - A single dictionary of assets and their balances.
         '''
-        data = PublicKraken().make_api_data(asset=asset)
-
         # be sure that (if supplied) the asset is in the Kraken recognized variant
-        try:
-            data['asset'] = PublicKraken().name_converter(data['asset'])
-            asset = data['asset']
-        except KeyError: data = data
+        if self.asset is not None:
+            asset = PublicKraken(self.asset).name_converter()
+        else:
+            asset = self.asset
+
+        data = PublicKraken().make_api_data(asset=asset)
 
         message = self.authenticate('Balance', data)
 
@@ -893,16 +857,16 @@ class PrivateKraken:
         else:
             return message
 
-    def get_trade_balance(self, asset='ZUSD', aclass='currency'):
+    def get_trade_balance(self, currency='ZUSD', aclass='currency'):
         # returns a user's trade balance for a given asset, USD is default
             # Note: you can also choose the class of asset ('aclass'), but Kraken currently (1.17.2021) only has currency, 
             # so currency is the default option and likely does not need to be changed.
         '''
         args:
-            *Optional: 'asset' = asset used to return balance for.
-                - By default, asset class is set to 'currency'.  Kraken currently (01.17.2021) only lists currecies, so this should not be changed.
+            *Optional: 'currency' = currency the data is returned as.
+                - By default, currency is set to 'ZUSD'.  Takes either the offical Kraken name, wsname or alternative name.
             *Optional: 'aclass' = asset class to return balance for.
-                - By default, asset is set to 'ZUSD'.  Takes either the offical Kraken name, wsname or alternative name.
+                - By default, asset class is set to 'currency'.  Kraken currently (01.17.2021) only lists currecies, so this should not be changed.
 
         returns: 
             - A dictionary of trade balance information:
@@ -916,8 +880,8 @@ class PrivateKraken:
                 mf = free margin = equity - initial margin (maximum margin available to open new positions)
                 ml = margin level = (equity / initial margin) * 100
         '''
-
-        asset = PublicKraken().name_converter(asset)
+        
+        asset = PublicKraken(currency).name_converter()
 
         data = PublicKraken().make_api_data(asset=asset, aclass=aclass)
 
@@ -1089,7 +1053,7 @@ class PrivateKraken:
                 - By default, set to 'None'
             * Optional: docalcs = True or False, if True then the returned data will include profit/loss calculations for the 'net' value
                 - By default, set to 'False'
-            * Optional: consolidated = if set to 'market' then the returned data will be consolidate into one position for each market
+            * Optional: consolidation = if set to 'market' then the returned data will be consolidated into one position for each market
                 - I.e. - if you have open 3 ETH positions and 5 BTC positons, 'market' will return only two positions- one for your average ETH and one for your average BTC
                 - By default, set to 'None'.
 
@@ -1120,11 +1084,9 @@ class PrivateKraken:
 
         return message
 
-    def get_fee_volume(self, pair=None, fee_info=True):
+    def get_fee_volume(self, fee_info=True):
         '''
         args:
-            * Optional: pairs = if a pair, or list of pairs, is provided, then only fee data will be provided for those.
-                - By default, set to 'None' which will return ALL fee volume data
             * Optional: fee_info = True or False, when set to True will return the fee information along with user's trade volume
                 - By default, set to True
                 **NOTICE: it appears this functionality is not working with Kraken right now.  Investigating as to why 'True' does not return fee info.  For now, will have to use the public method 'get_fees' in conjunction with the volume amount returned here.
@@ -1149,6 +1111,7 @@ class PrivateKraken:
                     nextvolume = volume level of next tier (if not fixed fee.  nil if at lowest fee tier)
                     tiervolume = volume level of current tier (if not fixed fee.  nil if at lowest fee tier)
         '''
+        pair = PublicKraken(self.asset).pair_matching()
 
         data = PublicKraken().make_api_data(pair=pair, fee_info=fee_info)
 
@@ -1156,7 +1119,7 @@ class PrivateKraken:
 
         return message
 
-    def add_standard_order(self, pair, side, volume, ordertype='market', price=None, price2=None, leverage=None, oflags=None, start_time=0, expire_time=0, userref=None, validate=False):
+    def add_standard_order(self, side, volume, ordertype='market', price=None, price2=None, leverage=None, oflags=None, start_time=0, expire_time=0, userref=None, validate=False):
         # creates an order for Kraken
             # either buy or sell (as side)
             # market, limit, stop-loss, take-profift, stop-loss-limit, take-profit-limit, settle-position
@@ -1168,7 +1131,6 @@ class PrivateKraken:
         # this will be used as teh backbone for most of our order functions
         '''
         args: 
-            - pair = pair to trade
             - side = side of order ('buy' or 'sell')
             - volume = amount of currency to trade
                 * Optional: ordertype =
@@ -1233,13 +1195,10 @@ class PrivateKraken:
                 close[price] = price
                 close[price2] = secondary price
         '''
+        pair = PublicKraken(self.asset).pair_matching()
+        
         if volume == None or volume == 0:
             raise Exception({'input_error':'Must enter in a volume for the trade'})
-
-        if pair == None:
-            raise Exception({'input_error':'Must enter in a valid trading pair for the trade'})
-        else:
-            pair = PublicKraken().pair_matching(pair)
 
         if side != 'buy' and side != 'sell':
             raise Exception({'input_error':"'side' must be either 'buy' or 'sell'"})
@@ -1264,11 +1223,10 @@ class PrivateKraken:
 
         return message
 
-    def market_buy(self, pair, volume, price=None, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
+    def market_buy(self, volume, price=None, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
         # allows for a quick market buy (notice, 'side' is not an input option, but is automatically included as 'buy' as part of the data packet sent to the API)
         '''
         args: 
-            - pair = the valid Kraken trading pair name, or common name. (i.e.- 'ethusd' or 'ETH/USD' or 'XETHZUSD')
             - volume = the lot size of the purchase.
                 * Optional: price = the price at which to transact the market order
                 * Optional: leverage = how much leverage to use.  See the Kraken documentation or PublicKraken.get_pair_info() for more information on a specific asset
@@ -1287,7 +1245,6 @@ class PrivateKraken:
             raise Exception({'server_error':f'Server is in {status[0]} mode'})
 
         message = self.add_standard_order(
-            pair=pair, 
             side='buy', 
             price=price, 
             ordertype='market', 
@@ -1302,11 +1259,10 @@ class PrivateKraken:
 
         return message
 
-    def market_sell(self, pair, volume, price=None, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
+    def market_sell(self, volume, price=None, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
         # allows for a quick market sell (notice, 'side' is not an input option, but is automatically included as 'sell' as part of the data packet sent to the API)
         '''
         args: 
-            - pair = the valid Kraken trading pair name, or common name. (i.e.- 'ethusd' or 'ETH/USD' or 'XETHZUSD')
             - volume = the lot size of the purchase.
                 * Optional: price = the price at which to transact the market order
                 * Optional: leverage = how much leverage to use.  See the Kraken documentation or PublicKraken.get_pair_info() for more information on a specific asset
@@ -1325,7 +1281,6 @@ class PrivateKraken:
             raise Exception({'server_error':f'Server is in {status[0]} mode'})
 
         message = self.add_standard_order(
-            pair=pair, 
             side='sell', 
             price=price, 
             ordertype='market', 
@@ -1340,7 +1295,7 @@ class PrivateKraken:
 
         return message
 
-    def limit_buy(self, pair, volume, price, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
+    def limit_buy(self, volume, price, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
         # allows for a quick limit buy (notice, 'buy' is not an input option, but is automatically included as 'buy' as part of the data packet sent to the API)
         '''
         args: 
@@ -1362,8 +1317,7 @@ class PrivateKraken:
         if status[0] == 'maintenance' or status[0] == 'cancel_only':
             raise Exception({'server_error':f'Server is in {status[0]} mode'})
 
-        message = self.add_standard_order(
-            pair=pair, 
+        message = self.add_standard_order( 
             side='buy', 
             price=price, 
             ordertype='limit', 
@@ -1378,7 +1332,7 @@ class PrivateKraken:
 
         return message
 
-    def limit_sell(self, pair, volume, price, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
+    def limit_sell(self, volume, price, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
         # allows for a quick limit sell (notice, 'sell' is not an input option, but is automatically included as 'sell' as part of the data packet sent to the API)
         '''
         args: 
@@ -1400,8 +1354,7 @@ class PrivateKraken:
         if status[0] == 'maintenance' or status[0] == 'cancel_only':
             raise Exception({'server_error':f'Server is in {status[0]} mode'})
 
-        message = self.add_standard_order(
-            pair=pair, 
+        message = self.add_standard_order( 
             side='sell', 
             price=price, 
             ordertype='limit', 
@@ -1451,8 +1404,8 @@ class PrivateKraken:
 
 class KrakenWS:
 
-    def __init__(self):
-        self = self
+    def __init__(self, asset=None):
+        self.asset = asset
     
     def get_ws_token(self):
         '''
@@ -1471,11 +1424,8 @@ class KrakenWS:
         # return the token
         return token
 
-    def ws_name(self, pair):
-        '''
-        args:
-            - pair = any trading pair name/names, i.e.- 'ethusd', ['btcusd', 'XMR/USD'], 'XXBTZUSD'
-        
+    def ws_name(self):
+        '''        
         returns:
             - wsname of specified trading pair/pairs
         '''
@@ -1490,6 +1440,8 @@ class KrakenWS:
         ws_names = []
         wsdict = {}
         altdict = {}
+
+        pair = self.asset
 
         # as long as Kraken is not returning an error, start the logic on converting the names to wsnames
         if not res['error']:
@@ -1559,11 +1511,8 @@ class KrakenWS:
         else:
             raise Exception(res['error'])
 
-    def ws_ticker(self, pair, reqid=None):
-        '''
-        args:
-            -pair: valid Kraken trading pair, alternative name or wsname
-        
+    def ws_ticker(self, reqid=None):
+        '''        
         returns:
             -Dictionary of websocket data (see Kraken Websocket docs for full data definitioins)
         '''
@@ -1582,7 +1531,7 @@ class KrakenWS:
         ws = websocket.create_connection('wss://ws.kraken.com/')
 
         # be sure 'pair' is in wsname format
-        pair = self.ws_name(pair)
+        pair = self.ws_name()
 
         # be sure 'pair' is a list
         if type(pair)==list:
@@ -1616,7 +1565,180 @@ class KrakenWS:
         while True:
             trade_data = json.loads(ws.recv())
 
-            return trade_data
+            print(trade_data)
 
         ws.close()
 
+class KrakenData:
+
+    def __init__(self, asset=None):
+        self.asset = asset
+    
+    def create_kraken_db(self, folder_path, db_path, db_name='kraken_historical_trades'):
+        # this function will create a sqlite database from the Kraken downloadable data found at:
+            # https://support.kraken.com/hc/en-us/articles/360047543791-Downloadable-historical-market-data-time-and-sales-
+        # folder_path is the folder that you download and save these files in
+        # db_path is where you want the databse to be created and stored.
+        # Beware - if you use the entire dataset, the trade history will be around 20 GB and takes about 15-30 minutes to run
+        '''
+        args:
+            - folder_path = directory path where Kraken historical data is stored
+            - db_path = directory path where the database will be created and stored
+            * Optional: db_name = name of the database that will be created, default name is 'trade_historical_data.db'
+
+        creates:
+            - sqlite database
+        '''
+        # create a list of all the available data files from Kraken. These will be used for the tables in the sqlite db.
+        table_list = os.listdir(folder_path)
+        file_count = len(table_list)
+        count = 0
+
+        # connect to the db, if it doesn't exist it will be created.
+        conn = sqlite3.connect(Path(f'{db_path}/{db_name}.db'))
+
+        # read in the .csv files as a pandas dataframe and then send to the newly created db
+        for table in table_list:
+            count += 1
+            df = pd.read_csv(
+                Path(f'{folder_path}/{table}'),
+                delimiter=',',
+                names=['timestamp', 'price', 'volume'])
+            
+            df.set_index('timestamp', inplace=True, )
+            
+            df.to_sql(f'{table.replace(".csv", "")}', conn, if_exists='replace', index=True)
+            print(f'Progress: {int((count / file_count) * 100)}%')
+        
+        # close the connection after the table is built
+        conn.close()
+
+    def ohlcv_df(self, interval, db_path):
+        # takes a crypto trading pair and time interval and returns an OHLC database
+
+        pair = PublicKraken(self.asset).pair_matching()
+        pair = PublicKraken(pair).get_pair_info()[pair]['altname']
+
+        conn = sqlite3.connect(db_path)
+
+        query = f'SELECT * FROM {pair}'
+
+        data = pd.read_sql(query, conn, index_col='timestamp')
+
+        conn.close()
+
+        data['date'] = pd.to_datetime(data.index, unit='s')
+
+        data = data[['date', 'price', 'volume']]
+
+        df = data.resample(interval, on='date').agg({'price': 'ohlc', 'volume':'sum', 'date':'count'})
+
+        ohlcv = df['price']
+        ohlcv['volume'] = df['volume']['volume']
+        ohlcv['trade_count'] = df['date']['date']
+
+        return ohlcv
+
+    def trades_df(self, db_path):
+        # takes a crypto trading pair and returns an trades database
+
+        pair = PublicKraken(self.asset).pair_matching()
+        pair = PublicKraken().get_pair_info()[pair]['altname']
+
+        conn = sqlite3.connect(db_path)
+
+        query = f'SELECT * FROM {pair}'
+
+        data = pd.read_sql(query, conn, index_col='timestamp')
+
+        conn.close()
+
+        data['date'] = pd.to_datetime(data.index, unit='s')
+
+        data = data[['date', 'price', 'volume']]
+
+        return data
+
+    def update_db(self, db_path):
+
+        conn = sqlite3.connect(db_path)
+        
+        # pull in all the available pairs on Kraken (unless just one asset is provided for in instantiation)
+        if self.asset is not None:
+            pair_list = [PublicKraken(self.asset).pair_matching()]
+        else:
+            pair_list = PublicKraken().get_asset_pairs()
+
+        # instantiate some variables to track the progress of the download
+        progress_tracker = len(pair_list)
+        count = 0
+
+        # loop through all the pairs and update the missing data from the sqlite database
+        for pair in pair_list:
+            # print out the download progress
+            count += 1
+
+            # use a try/except to skip over the data that might not have any current data
+            try:
+                df = self.trades_df(db_path)
+                
+                # last_time must be unix time with nanosecond resolution (default is second resolution)
+                last_time  = int(df.iloc[-1].name) * 1000000000
+            except: continue
+
+            # for Public Kraken API calls, you get a maximum of 15 calls (which is increased by 1 every 3 seconds until 15 is refilled again)
+            max_calls = 15
+            call_add_rate = 3 # 3 = 1 call every 3 seconds
+            
+            # since we already called the API once in the message call, we need to start our counter at 14 (plus this builds in a little leeway to guarantee we don't break the rules)
+            call_count = max_calls - 1
+            call_time = time.time()
+
+            # since we only get back the last 1000 trades, if the length of the df is less than 1000 then we are up to date
+            df_length = 1000
+
+            while df_length >= 1000:
+                # first check to see if more than 3 seconds have passed and add time back to 'call_count' if so, otherwise subtract one from the 'call_count'
+                if (time.time() - call_add_rate) >= call_time:
+                    call_time = time.time()
+                    call_count += 1
+                else:
+                    call_count -= 1    
+
+                # if the 'call_count' is greater than 0, then make the call, otherwise wait enough time for the call count to reload
+                if call_count > 0:
+                    # subscribe to the 'Trades' endpoint
+                    url = 'https://api.kraken.com/0/public/Trades'
+                    data = PublicKraken().make_api_data(pair=pair, since=last_time)  
+                    message = requests.post(url, data).json()
+                    if not message['error']:
+                        df2 = pd.DataFrame(message['result'][pair], columns=['price', 'volume', 'timestamp', 'buy/sell', 'ordertype', 'misc'])
+                        df2.set_index('timestamp', inplace=True)
+                        df2 = df2[['price', 'volume']]
+                    else:
+                        raise Exception({'kraken_error': f'Error Message: {message["error"]}'})
+
+                    # find the table name to update
+                    table_name = pair
+
+                    last_time = int(message['result']['last'])
+                    last_date = pd.to_datetime((last_time / 1000000000), unit='s')
+                    
+                    # update df_length to see if it is time to exit the loop
+                    df_length = len(df2)
+
+                    print(last_time, last_date, df_length)
+                    df2.to_sql(table_name, conn, if_exists='append', index=False)   
+
+                # else, wait until the 'call_count' resets
+                else:
+                    # reset call count
+                    call_count = max_calls
+                    # wait for the appropriate time for the Kraken counter to reset
+                    for i in range(0, max_calls * call_add_rate):
+                        time.sleep(1)
+
+            progress = count/progress_tracker
+            print(f'Progress = {int(progress * 100)}%')
+        
+        conn.close()
