@@ -1607,7 +1607,7 @@ class KrakenData:
             
             df.set_index('timestamp', inplace=True, )
             
-            df.to_sql(f'{table.replace(".csv", "")}', conn, if_exists='replace', index=True)
+            df.to_sql(f'{table.replace(".csv", "")}', conn, if_exists='replace', method='multi')
             print(f'Progress: {int((count / file_count) * 100)}%')
         
         # close the connection after the table is built
@@ -1669,12 +1669,13 @@ class KrakenData:
         else:
             pair_list = PublicKraken().get_asset_pairs()
 
-        # instantiate some variables to track the progress of the download
+        # instantiate some variables to track the progress of the update
         progress_tracker = len(pair_list)
         count = 0
 
         # loop through all the pairs and update the missing data from the sqlite database
         for pair in pair_list:
+
             # print out the download progress
             count += 1
 
@@ -1697,13 +1698,16 @@ class KrakenData:
             # since we only get back the last 1000 trades, if the length of the df is less than 1000 then we are up to date
             df_length = 1000
 
+            # Find the table name to update, which is the pair's altname.
+            table_name = PublicKraken(pair).get_pair_info()[pair]['altname']
+
             while df_length >= 1000:
                 # first check to see if more than 3 seconds have passed and add time back to 'call_count' if so, otherwise subtract one from the 'call_count'
-                if (time.time() - call_add_rate) >= call_time:
+                if (time.time() - call_add_rate) > call_time:
                     call_time = time.time()
                     call_count += 1
                 else:
-                    call_count -= 1    
+                    call_count -= 1
 
                 # if the 'call_count' is greater than 0, then make the call, otherwise wait enough time for the call count to reload
                 if call_count > 0:
@@ -1717,26 +1721,23 @@ class KrakenData:
                         df2 = df2[['price', 'volume']]
                     else:
                         raise Exception({'kraken_error': f'Error Message: {message["error"]}'})
-
-                    # find the table name to update
-                    table_name = pair
-
+                    
+                    # set the last_time parameters for tracking purposes
                     last_time = int(message['result']['last'])
                     last_date = pd.to_datetime((last_time / 1000000000), unit='s')
                     
                     # update df_length to see if it is time to exit the loop
                     df_length = len(df2)
 
-                    print(last_time, last_date, df_length)
-                    df2.to_sql(table_name, conn, if_exists='append', index=False)   
+                    # print(f'Table: {table_name}, Last Date: {last_date}, Trade Count: {df_length}, Call Count: {call_count}')
+                    df2.to_sql(table_name, conn, if_exists='append')   
 
                 # else, wait until the 'call_count' resets
                 else:
                     # reset call count
-                    call_count = max_calls
+                    call_count = max_calls - 1
                     # wait for the appropriate time for the Kraken counter to reset
-                    for i in range(0, max_calls * call_add_rate):
-                        time.sleep(1)
+                    time.sleep(max_calls * call_add_rate)
 
             progress = count/progress_tracker
             print(f'Progress = {int(progress * 100)}%')
