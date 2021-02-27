@@ -1,6 +1,6 @@
 # CrackedKraken
 Repository for using Kraken's Public and Private APIs  
-Current version = v0.3.0
+Current version = v0.3.1
 
 ## Table of Contents
 * [Updates](#Updates)
@@ -9,6 +9,15 @@ Current version = v0.3.0
 * [References](#References)
 
 ## Updates:
+* 02/27/2021 - released v0.3.1
+   * release notes:
+      * Added functionality to `PrivateKraken()` class:
+         * can now instantiate the class with 'userref' as an argument
+         * added `.close_short_position()` and `.close_long_position()` methods
+      * continued to clean up certain functions and grammar mistakes
+      * `KrakenData().update_db()` now includes a check to be sure the Kraken servers are online
+      * Still developing `KrakenWS()` class
+
 * 02/16/2021 - released v0.3.0
     * release notes:
         * added KrakenData class
