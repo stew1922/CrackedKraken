@@ -8,6 +8,7 @@ import pandas as pd
 import websocket
 import sqlite3
 from pathlib import Path
+from datetime import datetime
 
 # load the .env file that your Kraken keys are stored in (must be at or above this library level)
 load_dotenv()
@@ -65,13 +66,13 @@ class PublicKraken:
         else:
             raise Exception({'kraken_error': f"Error Message: {res['error']}"})
 
-    def make_api_data(self, asset=None, aclass=None, trades=None, userref=None, start=None, end=None, ofs=None, closetime=None, type=None, txid=None, consolidation=None, docalcs=None, pair=None, fee_info=None, ordertype=None, price=None, price2=None, volume=None, leverage=None, oflags=None, starttm=None, expiretm=None, validate=None, since=None, info=None):
+    def make_api_data(self, asset=None, aclass=None, trades=None, userref=None, start=None, end=None, ofs=None, closetime=None, type=None, txid=None, consolidation=None, docalcs=None, pair=None, fee_info=None, ordertype=None, price=None, price2=None, volume=None, leverage=None, oflags=None, starttm=None, expiretm=None, validate=None, since=None, info=None, activity=None):
         # simple function that will create the 'data' dictionary that will be used to pass information into any api calls
         # will be used only as a helper function and doesn't really need to be called on its own.
         # if you write any new functions, the inputs must be added as an argument to this function with a default value of 'None'
             # as long as the argument value is 'None' the data will not be included in the data package, only once the argument value is something other than 'None'
             # IF anyone has a better idea on how to handle this so that the argument list for this function is not as long, please make a fork and pull request with your solution (or let me know)
-        data = {arg: value for arg, value in locals().items() if arg != 'endpoint' and arg != 'url' and arg != 'method' and value is not None and value != False}
+        data = {arg: value for arg, value in locals().items() if arg != 'endpoint' and arg != 'url' and arg != 'method' and value is not None and value is not False}
 
         return data
 
@@ -296,7 +297,10 @@ class PublicKraken:
 
         # return the result
         if not message['error']:
-            return message['result']
+            if len(pair) < 1:
+                return message['result']
+            else:
+                return message['result'][pair]
         else:
             raise Exception({'kraken_error': f'Error Message: {message["error"]}'})
 
@@ -397,41 +401,6 @@ class PublicKraken:
 
         else:
             raise Exception({'kraken_error': f"Error Message: {res['error']}"})
-
-    def get_pair_trade_data(self):
-        # returns all the trade info for the given pair
-            # altname = alternate pair name
-            # wsname = WebSocket pair name (if available)
-            # aclass_base = asset class of base component
-            # base = asset id of base component
-            # aclass_quote = asset class of quote component
-            # quote = asset id of quote component
-            # lot = volume lot size
-            # pair_decimals = scaling decimal places for pair
-            # lot_decimals = scaling decimal places for volume
-            # lot_multiplier = amount to multiply lot volume by to get currency volume
-            # leverage_buy = array of leverage amounts available when buying
-            # leverage_sell = array of leverage amounts available when selling
-            # fees = fee schedule array in [volume, percent fee] tuples
-            # fees_maker = maker fee schedule array in [volume, percent fee] tuples (if on maker/taker)
-            # fee_volume_currency = volume discount currency
-            # margin_call = margin call level
-            # margin_stop = stop-out/liquidation margin level
-            # ordermin = minimum order volume for pair
-        '''
-        returns:
-            - A dictionary of trade data for the given pair.
-        ''' 
-
-        url = 'https://api.kraken.com/0/public/AssetPairs'
-        res = requests.get(url).json()
-
-        pair = self.pair_matching()
-
-        if not res['error']:
-            return res['result'][pair]
-        else:
-            raise Exception(f"Error Message: {res['error']}")
 
     def get_ticker_info(self):
         # returns the current order book level one for a given pair, or list of pairs
@@ -641,9 +610,9 @@ class PublicKraken:
             - A dictionary or list of all available leverage options for that asset.
         '''
         if side == None:
-            leverage = {'buy': self.get_pair_trade_data()['leverage_buy'], 'sell': self.get_pair_trade_data()['leverage_buy']}
+            leverage = {'buy': self.get_pair_info()['leverage_buy'], 'sell': self.get_pair_info()['leverage_buy']}
         else:
-            leverage = self.get_pair_trade_data()[f'leverage_{side}']
+            leverage = self.get_pair_info()[f'leverage_{side}']
 
         return leverage
 
@@ -729,9 +698,8 @@ class PublicKraken:
                         
                     # wait until the 'call_count' resets
                     else:
-                        call_count = max_calls
-                        for i in range(0, max_calls * call_add_rate):
-                            time.sleep(1)
+                        call_count = max_calls - 1
+                        time.sleep(max_calls * call_add_rate)
                 return hist
         
         else:
@@ -751,9 +719,9 @@ class PublicKraken:
             time.sleep(3)
             is_online = self.get_system_status()
 
-    def guarantee_operational(self):
+    def guarantee_limit(self):
         '''
-        This is a function that will run an infinte loop until the server is operational, even if it is limited.
+        This is a function that will run an infinte loop until the server allows at least limit orders.
             *WARNING: this function does not guarantee all order types.  If you need to place an order (especially a market order) utilize the 'guarantee_online' function
         '''
         # this function will check to see if the Kraken server is in an operational mode (either 'online' or 'post_only' or 'limit_only'), otherwise it will wait 3 seconds and then try again
@@ -774,15 +742,38 @@ class PublicKraken:
         # the 3 second wait will ensure you do not exceed your API call limits
         is_cancellable = self.get_system_status()
 
-        while is_cancellable[0] == 'maintenance':
+        while is_cancellable[0] == 'maintenance' or is_cancellable[0] == 'kraken_error':
             print(f'System is in {is_cancellable[0]} mode.  Time checked is {is_cancellable[1]}')
             time.sleep(3)
             is_cancellable = self.get_system_status()
 
-class PrivateKraken:
+    def guarantee_operational(self):
+        '''
+        This is a function that will run an infinte loop until the server is in a operational state.
+            *WARNING: this will not guarantee a mode that allows order placing, rather it only guarantees that the server is responsive.
+        '''
+        # this function will check to see if the Kraken server is in a cancel mode (either 'online' or 'post_only' or 'limit_only' or 'cancel_only'), otherwise it will wait 3 seconds and then try again
+        # the 3 second wait will ensure you do not exceed your API call limits
+        is_cancellable = self.get_system_status()
 
-    def __init__(self, asset=None):
+        while is_cancellable[0] == 'kraken_error':
+            print(f'System is in {is_cancellable[0]} mode.  Time checked is {is_cancellable[1]}')
+            time.sleep(3)
+            is_cancellable = self.get_system_status()
+
+class PrivateKraken:a
+
+    def __init__(self, asset=None, userref=None):
+        '''
+        Args:
+            - *Optional: asset = asset to hold as an argument for any method
+            - *Optional: userref = the user reference id to pull data for
+        '''
         self.asset = asset
+
+        # userref can be used to define different "sub accounts", much like portfolios on Coinbase.  This is only useful for different bots to trade on different strategies at the same time
+        # Not required
+        self.userref = userref
 
         # set an api key variable that will be used to authenticate your account
         krakenapi = os.getenv('kraken_api')
@@ -832,7 +823,7 @@ class PrivateKraken:
         else:
             raise Exception({'kraken_error': f"Error Message: {res['error']}"})
 
-    def get_balance(self):
+    def get_balance(self, asset=None):
         # returns to the user the balance of all accounts in Kraken
         '''
         args:
@@ -843,10 +834,8 @@ class PrivateKraken:
             - A single dictionary of assets and their balances.
         '''
         # be sure that (if supplied) the asset is in the Kraken recognized variant
-        if self.asset is not None:
-            asset = PublicKraken(self.asset).name_converter()
-        else:
-            asset = self.asset
+        if asset is not None:
+            asset = PublicKraken(asset).name_converter()
 
         data = PublicKraken().make_api_data(asset=asset)
 
@@ -889,13 +878,11 @@ class PrivateKraken:
 
         return message
 
-    def get_open_orders(self, trades=None, userref=None):
+    def get_open_orders(self, trades=None):
         '''
         args:
             *Optional: trades = True or False, determines whether to include trades in output.
                 - By default, set to 'False'.
-            *Optioinal: userref = a user reference id and can be used to restrict orders to that particular userref.
-                - By default, set to 'None' and returns all orders
 
         returns: 
             - A dictionary of open order information with the Transaction ID as the key.  It is empty if there are no open orders.
@@ -941,20 +928,20 @@ class PrivateKraken:
         '''
 
         # build the dictionary for the required/optional items to be sent in the API request
-        data = PublicKraken().make_api_data(trades=trades, userref=userref)
+        data = PublicKraken().make_api_data(trades=trades, userref=self.userref)
 
         message = self.authenticate('OpenOrders', data)
 
         return message['open']
 
-    def get_closed_orders(self, trades=None, userref=None, start=None, end=None, ofs=None, closetime=None):
+    def get_closed_orders(self, trades=None, start=None, end=None, ofs=None, closetime=None):
         '''
         -args: 
-            * Optional: trades, userrf, start, end, ofs or closetime.
+            * Optional: trades, start, end, ofs or closetime.
                 - By default, all optional inputs are set to None.
 
         -returns: 
-            * A of closed order information with the Transaction ID as the key.  It is empty if there are no closed orders.
+            * A dictionary of closed order information with the Transaction ID as the key.  It is empty if there are no closed orders.
         -----------------------------------------------------------------------------------------------------------------------------
             refid = Referral order transaction id that created this order
                 userref = user reference id
@@ -996,7 +983,7 @@ class PrivateKraken:
                 trades = array of trade ids related to order (if trades info requested and data available)
         '''
         
-        data = PublicKraken().make_api_data(trades=trades, userref=userref, start=start, end=end, ofs=ofs, closetime=closetime)
+        data = PublicKraken().make_api_data(trades=trades, userref=self.userref, start=start, end=end, ofs=ofs, closetime=closetime)
 
         message = self.authenticate('ClosedOrders', data)
 
@@ -1082,7 +1069,13 @@ class PrivateKraken:
             
         message = self.authenticate('OpenPositions', data)
 
-        return message
+        if not message:
+            return message
+        else:
+            if consolidation == 'market':
+                return message[0]
+            else:
+                return message
 
     def get_fee_volume(self, fee_info=True):
         '''
@@ -1119,7 +1112,7 @@ class PrivateKraken:
 
         return message
 
-    def add_standard_order(self, side, volume, ordertype='market', price=None, price2=None, leverage=None, oflags=None, start_time=0, expire_time=0, userref=None, validate=False):
+    def add_standard_order(self, side, volume=None, ordertype='market', price=None, price2=None, leverage=None, oflags=None, start_time=0, expire_time=0, validate=False):
         # creates an order for Kraken
             # either buy or sell (as side)
             # market, limit, stop-loss, take-profift, stop-loss-limit, take-profit-limit, settle-position
@@ -1144,7 +1137,6 @@ class PrivateKraken:
                     - can use '+<timestamp>' to specify a time from the current time
                 * Optional: expire_time = scheduled time to cancel the order, unix timestamp
                     - can use '+<timestamp>' to specify a time from the current time
-                * Optional: userref = user reference id, 32-bit signed number
                 * Optional: validate = True or False, when set to True will only test the inputs with Kraken's API, but will not send the order through
                     - By default, set to 'False'
         
@@ -1197,8 +1189,8 @@ class PrivateKraken:
         '''
         pair = PublicKraken(self.asset).pair_matching()
         
-        if volume == None or volume == 0:
-            raise Exception({'input_error':'Must enter in a volume for the trade'})
+        if volume != None and float(volume) < 0:
+            raise Exception({'input_error':'Must enter in a positive volume for the trade'})
 
         if side != 'buy' and side != 'sell':
             raise Exception({'input_error':"'side' must be either 'buy' or 'sell'"})
@@ -1215,7 +1207,7 @@ class PrivateKraken:
             oflags=oflags, 
             starttm=start_time, 
             expiretm=expire_time, 
-            userref=userref, 
+            userref=self.userref, 
             validate=validate
         )
 
@@ -1223,17 +1215,15 @@ class PrivateKraken:
 
         return message
 
-    def market_buy(self, volume, price=None, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
+    def market_buy(self, volume=None, leverage=None, oflags=None, start_time=None, expire_time=None, validate=False):
         # allows for a quick market buy (notice, 'side' is not an input option, but is automatically included as 'buy' as part of the data packet sent to the API)
         '''
         args: 
             - volume = the lot size of the purchase.
-                * Optional: price = the price at which to transact the market order
                 * Optional: leverage = how much leverage to use.  See the Kraken documentation or PublicKraken.get_pair_info() for more information on a specific asset
                 * Optional: oflags = fcib, fciq, nompp, post
                 * Optional: start_time
                 * Optional: expire_time
-                * Optional: userref
                 * Optional: validate = False by default.  When 'True' will not send order to Kraken, but will check the parameters and return a successful message.
         
         returns:
@@ -1242,34 +1232,30 @@ class PrivateKraken:
         # be sure servers are in full operational mode
         status = PublicKraken().get_system_status()
         if status[0] != 'online':
-            raise Exception({'server_error':f'Server is in {status[0]} mode'})
+            raise Exception({'server_error': f'Server is in {status[0]} mode'})
 
         message = self.add_standard_order(
             side='buy', 
-            price=price, 
             ordertype='market', 
             volume=volume, 
             leverage=leverage, 
             oflags=oflags, 
             start_time=start_time, 
             expire_time=expire_time, 
-            userref=userref, 
             validate=validate
         )
 
         return message
 
-    def market_sell(self, volume, price=None, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
+    def market_sell(self, volume=None, leverage=None, oflags=None, start_time=None, expire_time=None, validate=False):
         # allows for a quick market sell (notice, 'side' is not an input option, but is automatically included as 'sell' as part of the data packet sent to the API)
         '''
         args: 
             - volume = the lot size of the purchase.
-                * Optional: price = the price at which to transact the market order
                 * Optional: leverage = how much leverage to use.  See the Kraken documentation or PublicKraken.get_pair_info() for more information on a specific asset
                 * Optional: oflags = fcib, fciq, nompp, post
                 * Optional: start_time
                 * Optional: expire_time
-                * Optional: userref
                 * Optional: validate = False by default.  When 'True' will not send order to Kraken, but will check the parameters and return a successful message.
         
         returns:
@@ -1282,20 +1268,18 @@ class PrivateKraken:
 
         message = self.add_standard_order(
             side='sell', 
-            price=price, 
             ordertype='market', 
             volume=volume, 
             leverage=leverage, 
             oflags=oflags, 
             start_time=start_time, 
-            expire_time=expire_time, 
-            userref=userref, 
+            expire_time=expire_time,
             validate=validate
         )
 
         return message
 
-    def limit_buy(self, volume, price, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
+    def limit_buy(self, volume, price, leverage=None, oflags=None, start_time=None, expire_time=None, validate=False):
         # allows for a quick limit buy (notice, 'buy' is not an input option, but is automatically included as 'buy' as part of the data packet sent to the API)
         '''
         args: 
@@ -1306,7 +1290,6 @@ class PrivateKraken:
                 * Optional: oflags = fcib, fciq, nompp, post
                 * Optional: start_time
                 * Optional: expire_time
-                * Optional: userref
                 * Optional: validate = False by default.  When 'True' will not send order to Kraken, but will check the parameters and return a successful message.
         
         returns:
@@ -1325,18 +1308,16 @@ class PrivateKraken:
             leverage=leverage, 
             oflags=oflags, 
             start_time=start_time, 
-            expire_time=expire_time, 
-            userref=userref, 
+            expire_time=expire_time,
             validate=validate
         )
 
         return message
 
-    def limit_sell(self, volume, price, leverage=None, oflags=None, start_time=None, expire_time=None, userref=None, validate=False):
+    def limit_sell(self, volume, price, leverage=None, oflags=None, start_time=None, expire_time=None, validate=False):
         # allows for a quick limit sell (notice, 'sell' is not an input option, but is automatically included as 'sell' as part of the data packet sent to the API)
         '''
         args: 
-            - pair = the valid Kraken trading pair name, or common name. (i.e.- 'ethusd' or 'ETH/USD' or 'XETHZUSD')
             - volume = the lot size of the purchase.
                 * Optional: price = the price at which to transact the market order
                 * Optional: leverage = how much leverage to use.  See the Kraken documentation or PublicKraken.get_pair_info() for more information on a specific asset
@@ -1363,7 +1344,84 @@ class PrivateKraken:
             oflags=oflags, 
             start_time=start_time, 
             expire_time=expire_time, 
-            userref=userref, 
+            validate=validate
+        )
+
+        return message
+
+    def close_short_position(self, volume=None, oflags=None, start_time=None, expire_time=None, validate=False):
+        # allows for you to close open leveraged short positions
+        '''
+        args:
+            * Optional: volume = volume, in lots, that you wish to close, default = volume of entire open position
+            * Optional: oflags = fcib, fciq, nompp, post
+            * Optional: start_time
+            * Optional: expire_time
+            * Optional: userref
+            * Optional: validate = False by default.  When 'True' will not send order to Kraken, but will check the parameters and return a successful message.
+
+        returns:
+            - Order confirmation message
+        '''
+        pair = PublicKraken(self.asset).pair_matching()
+  
+        if type(pair) == list:
+            raise Exception({'input_error': 'Can only send one asset order at a time.'})
+
+        # find the leverage level to use
+        leverage = self.get_open_positions(consolidation='market')['leverage']
+
+        # if no volume supplied, close the entire position
+        if volume==None:
+            volume = self.get_open_positions(consolidation='market')['vol']
+
+        message = self.add_standard_order( 
+            side='buy', 
+            ordertype='market', 
+            volume=volume,
+            leverage=leverage,
+            oflags=oflags, 
+            start_time=start_time, 
+            expire_time=expire_time,
+            validate=validate
+        )
+
+        return message
+
+    def close_long_position(self, volume=None, oflags=None, start_time=None, expire_time=None, validate=False):
+        # allows for you to close open leveraged long positions
+        '''
+        args:
+            * Optional: volume = volume, in lots, that you wish to close
+            * Optional: oflags = fcib, fciq, nompp, post
+            * Optional: start_time
+            * Optional: expire_time
+            * Optional: userref
+            * Optional: validate = False by default.  When 'True' will not send order to Kraken, but will check the parameters and return a successful message.
+
+        returns:
+            - Order confirmation message
+        '''
+        pair = PublicKraken(self.asset).pair_matching()
+  
+        if type(pair) == list:
+            raise Exception({'input error': 'Can only send one asset order at a time.'})
+
+        # find the leverage level to use
+        leverage = self.get_open_positions(consolidation='market')['leverage']
+
+        # if no volume supplied, close the entire position
+        if volume==None:
+            volume = self.get_open_positions(consolidation='market')['vol']
+
+        message = self.add_standard_order( 
+            side='sell', 
+            ordertype='market', 
+            volume=volume,
+            leverage=leverage,
+            oflags=oflags, 
+            start_time=start_time, 
+            expire_time=expire_time,
             validate=validate
         )
 
@@ -1399,6 +1457,26 @@ class PrivateKraken:
         data = PublicKraken().make_api_data()
 
         message = self.authenticate('CancelAll', data)
+
+        return message
+
+    def get_ledger_info(self, aclass='currency', activity=None, start=None, end=None, ofs=None):
+
+        if self.asset != None:
+            asset = PublicKraken(self.asset).pair_matching()
+        else:
+            asset = self.asset
+
+        data = PublicKraken().make_api_data(
+            aclass = aclass,
+            asset = asset,
+            type = activity,
+            start = start,
+            end = end,
+            ofs = ofs
+        )       
+
+        message = self.authenticate('Ledgers', data)
 
         return message
 
@@ -1613,15 +1691,20 @@ class KrakenData:
         # close the connection after the table is built
         conn.close()
 
-    def ohlcv_df(self, interval, db_path):
+    def ohlcv_df(self, interval, db_path, start_time=None):
         # takes a crypto trading pair and time interval and returns an OHLC database
 
         pair = PublicKraken(self.asset).pair_matching()
-        pair = PublicKraken(pair).get_pair_info()[pair]['altname']
+        pair = PublicKraken(pair).get_pair_info()['altname']
 
         conn = sqlite3.connect(db_path)
 
-        query = f'SELECT * FROM {pair}'
+        if start_time is not None:
+            start_time = int(datetime.timestamp(pd.to_datetime(start_time, utc=True)))
+            query = f'SELECT * FROM {pair} WHERE timestamp >= {start_time}'
+        else:
+            query = f'SELECT * FROM {pair}'
+
 
         data = pd.read_sql(query, conn, index_col='timestamp')
 
@@ -1637,14 +1720,20 @@ class KrakenData:
         ohlcv['volume'] = df['volume']['volume']
         ohlcv['trade_count'] = df['date']['date']
 
-        return ohlcv
+        # it is highly unlikely that the last entry will be a complete interval (i.e.- pulling the info in the middle of the 
+        # day will only give a partial day for the last day) therefore we want to drop off the last entry for the returned dataframe
+        return ohlcv.iloc[:-1]
 
-    def trades_df(self, db_path):
+    def trades_df(self, db_path, pair=None):
         # takes a crypto trading pair and returns an trades database
+        if pair == None:
+            pair = PublicKraken(self.asset).pair_matching()
+            pair = PublicKraken(pair).get_pair_info()['altname']
+        else:
+            pair = PublicKraken(pair).pair_matching()
+            pair = PublicKraken(pair).get_pair_info()['altname']
 
-        pair = PublicKraken(self.asset).pair_matching()
-        pair = PublicKraken().get_pair_info()[pair]['altname']
-
+        # establish a sqlite3 connection to the database provided by db_path
         conn = sqlite3.connect(db_path)
 
         query = f'SELECT * FROM {pair}'
@@ -1664,7 +1753,7 @@ class KrakenData:
         conn = sqlite3.connect(db_path)
         
         # pull in all the available pairs on Kraken (unless just one asset is provided for in instantiation)
-        if self.asset is not None:
+        if self.asset != None:
             pair_list = [PublicKraken(self.asset).pair_matching()]
         else:
             pair_list = PublicKraken().get_asset_pairs()
@@ -1673,15 +1762,15 @@ class KrakenData:
         progress_tracker = len(pair_list)
         count = 0
 
+        # we need to initiate a new call time.  this is to help track the number of Kraken API calls - for every three seconds after this, we add 1 more call to the call counter
+        call_time = time.time()
+
         # loop through all the pairs and update the missing data from the sqlite database
         for pair in pair_list:
 
-            # print out the download progress
-            count += 1
-
             # use a try/except to skip over the data that might not have any current data
             try:
-                df = self.trades_df(db_path)
+                df = self.trades_df(db_path, pair=pair)
                 
                 # last_time must be unix time with nanosecond resolution (default is second resolution)
                 last_time  = int(df.iloc[-1].name) * 1000000000
@@ -1693,13 +1782,17 @@ class KrakenData:
             
             # since we already called the API once in the message call, we need to start our counter at 14 (plus this builds in a little leeway to guarantee we don't break the rules)
             call_count = max_calls - 1
-            call_time = time.time()
 
             # since we only get back the last 1000 trades, if the length of the df is less than 1000 then we are up to date
             df_length = 1000
 
             # Find the table name to update, which is the pair's altname.
-            table_name = PublicKraken(pair).get_pair_info()[pair]['altname']
+            table_name = PublicKraken(pair).get_pair_info()['altname']
+
+            # save a count variable to track the update process and then print it out
+            count += 1
+            progress = count/progress_tracker
+            time_init = int(df.iloc[-1].name)
 
             while df_length >= 1000:
                 # first check to see if more than 3 seconds have passed and add time back to 'call_count' if so, otherwise subtract one from the 'call_count'
@@ -1711,7 +1804,7 @@ class KrakenData:
 
                 # if the 'call_count' is greater than 0, then make the call, otherwise wait enough time for the call count to reload
                 if call_count > 0:
-                    # subscribe to the 'Trades' endpoint
+                    # subscribe to the 'Trades' endpoint and make a new dataframe
                     url = 'https://api.kraken.com/0/public/Trades'
                     data = PublicKraken().make_api_data(pair=pair, since=last_time)  
                     message = requests.post(url, data).json()
@@ -1719,27 +1812,38 @@ class KrakenData:
                         df2 = pd.DataFrame(message['result'][pair], columns=['price', 'volume', 'timestamp', 'buy/sell', 'ordertype', 'misc'])
                         df2.set_index('timestamp', inplace=True)
                         df2 = df2[['price', 'volume']]
+                    elif message['error'] == 'Unavailable' or message['error'] == 'Busy' or message['error'] == 'Internal error':
+                        call_count -= 1
+                        PublicKraken().guarantee_cancel()
                     else:
                         raise Exception({'kraken_error': f'Error Message: {message["error"]}'})
                     
-                    # set the last_time parameters for tracking purposes
-                    last_time = int(message['result']['last'])
-                    last_date = pd.to_datetime((last_time / 1000000000), unit='s')
-                    
+                    # send the new dataframe to the sqlite3 database
+                    df2.to_sql(table_name, conn, if_exists='append')   
+
                     # update df_length to see if it is time to exit the loop
                     df_length = len(df2)
 
-                    # print(f'Table: {table_name}, Last Date: {last_date}, Trade Count: {df_length}, Call Count: {call_count}')
-                    df2.to_sql(table_name, conn, if_exists='append')   
+                    # set the last_time parameters for tracking purposes
+                    last_time = int(message['result']['last'])
+                    last_date = pd.to_datetime((last_time / 1000000000), unit='s')
 
+                    time_now = int(time.time())
+                    init_time_diff = time_now - time_init
+                    current_time_diff = time_now - int((last_time / 1000000000))
+                    asset_progress = 1 - (current_time_diff / init_time_diff)
+                
                 # else, wait until the 'call_count' resets
                 else:
                     # reset call count
                     call_count = max_calls - 1
                     # wait for the appropriate time for the Kraken counter to reset
                     time.sleep(max_calls * call_add_rate)
-
-            progress = count/progress_tracker
-            print(f'Progress = {int(progress * 100)}%')
-        
+                
+                # print of progress tracking
+                if self.asset != None:
+                    print(f'Overall Progress = {int(asset_progress * 100)}%    Current Asset = {table_name}    Current Asset Progress = {int((asset_progress) * 100)}%    Last Date = {last_date}')
+                else:
+                    print(f'Overall Progress = {int(progress * 100)}%    Current Asset = {table_name}    Current Asset Progress = {int((asset_progress) * 100)}%    Last Date = {last_date}')
         conn.close()
+
