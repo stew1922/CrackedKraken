@@ -60,7 +60,7 @@ Current version = v0.3.1
     
     - NOTE: this will only return the most recent 720 time frames, to get more history utilize the following code:  
 
-    # first go to the Historical Kraken trades website and download all files: "https://support.kraken.com/hc/en-us/articles/360047543791-Downloadable-historical-market-data-time-and-sales-"   
+    # first go to the Historical Kraken trades website and download all files (or just the assets you wish to track): "https://support.kraken.com/hc/en-us/articles/360047543791-Downloadable-historical-market-data-time-and-sales-"   
 
     from kraken import KrakenData
     folder_path = 'C:/folder_path'     # this is the folder or directory where the downloaded Kraken history is saved.
@@ -72,7 +72,9 @@ Current version = v0.3.1
     # now that the database has been created, you can create any timed interval OHLCV dataframe you like.  Below, the sample creates a daily df:
 
     eth_df = KrakenData('ethusd').ohlcv_df('1D', db_path)
-
+    
+    -NOTE: It is advisable to use the KrakenData().update_db() function to keep the database up-to-date as Kraken only release trading data on a quarterly basis.
+    
 #### Pulling in trade history:  
     from kraken import PrivateKraken
     trade_history = PrivateKraken().get_trade_history(type='closed position')
