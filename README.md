@@ -57,14 +57,14 @@ Current version = v0.3.1
     from kraken import PublicKraken
     eth_df = PublicKraken('ethusd').get_ohlc_dataframe()
     
+    
     - NOTE: this will only return the most recent 720 time frames, to get more history utilize the following code:  
-
 
     # first go to the Historical Kraken trades website and download all files: "https://support.kraken.com/hc/en-us/articles/360047543791-Downloadable-historical-market-data-time-and-sales-"   
 
     from kraken import KrakenData
     folder_path = 'C:/folder_path'     # this is the folder or directory where the downloaded Kraken history is saved.
-    db_path = 'C:/db_path'     # this is the folder/location you would like the database to be saved - you will need around 12 GB of space.
+    db_path = 'C:/db_path'     # this is the folder/location you would like the database to be saved - you will need upwards of 15 GB of space.
 
     KrakenData().create_kraken_db(folder_path, db_path)
 
