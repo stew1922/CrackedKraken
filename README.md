@@ -9,6 +9,15 @@ Current version = v0.3.1
 * [References](#References)
 
 ## Updates:
+* 04/08/2021 - released v0.3.2
+    * release notes:
+        * Added new methods to `PublicKraken()` class:
+            * `.get_common_name()` which returns the wsname of the instantiated asset except for XXBTZUSD which is BTC/USD
+            * `.get_wsname()` which returns the wsname of the instantiated asset
+        * Kraken started using the wsname in some REST API calls, so the methods that rely on that have been updated
+        * Added new method to `KrakenWS()`:
+            * `.guarantee_no_open_orders()` which will pause your execution code until there are no open orders left on your account.  This will prevent any 'no available funds' errors. 
+
 * 02/27/2021 - released v0.3.1
    * release notes:
       * Added functionality to `PrivateKraken()` class:
