@@ -1,6 +1,6 @@
 # CrackedKraken
 Repository for using Kraken's Public and Private APIs  
-Current version = v0.3.0
+Current version = v0.3.1
 
 ## Table of Contents
 * [Updates](#Updates)
@@ -9,6 +9,15 @@ Current version = v0.3.0
 * [References](#References)
 
 ## Updates:
+* 02/27/2021 - released v0.3.1
+   * release notes:
+      * Added functionality to `PrivateKraken()` class:
+         * can now instantiate the class with 'userref' as an argument
+         * added `.close_short_position()` and `.close_long_position()` methods
+      * continued to clean up certain functions and grammar mistakes
+      * `KrakenData().update_db()` now includes a check to be sure the Kraken servers are online
+      * Still developing `KrakenWS()` class
+
 * 02/16/2021 - released v0.3.0
     * release notes:
         * added KrakenData class
@@ -48,14 +57,14 @@ Current version = v0.3.0
     from kraken import PublicKraken
     eth_df = PublicKraken('ethusd').get_ohlc_dataframe()
     
+    
     - NOTE: this will only return the most recent 720 time frames, to get more history utilize the following code:  
 
-
-    # first go to the Historical Kraken trades website and download all files: "https://support.kraken.com/hc/en-us/articles/360047543791-Downloadable-historical-market-data-time-and-sales-"   
+    # first go to the Historical Kraken trades website and download all files (or just the assets you wish to track): "https://support.kraken.com/hc/en-us/articles/360047543791-Downloadable-historical-market-data-time-and-sales-"   
 
     from kraken import KrakenData
     folder_path = 'C:/folder_path'     # this is the folder or directory where the downloaded Kraken history is saved.
-    db_path = 'C:/db_path'     # this is the folder/location you would like the database to be saved - you will need around 12 GB of space.
+    db_path = 'C:/db_path'     # this is the folder/location you would like the database to be saved - you will need upwards of 15 GB of space.
 
     KrakenData().create_kraken_db(folder_path, db_path)
 
@@ -63,7 +72,9 @@ Current version = v0.3.0
     # now that the database has been created, you can create any timed interval OHLCV dataframe you like.  Below, the sample creates a daily df:
 
     eth_df = KrakenData('ethusd').ohlcv_df('1D', db_path)
-
+    
+    -NOTE: It is advisable to use the KrakenData().update_db() function to keep the database up-to-date as Kraken only release trading data on a quarterly basis.
+    
 #### Pulling in trade history:  
     from kraken import PrivateKraken
     trade_history = PrivateKraken().get_trade_history(type='closed position')
