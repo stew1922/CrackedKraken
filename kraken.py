@@ -1,3 +1,5 @@
+# This is where all the Kraken API/websocket calls are located.  Do not modify unless you are fixing a bug.
+
 import os
 import json
 import requests, urllib
@@ -12,6 +14,7 @@ from datetime import datetime
 
 # load the .env file that your Kraken keys are stored in (must be at or above this library level)
 load_dotenv()
+
 
 class PublicKraken:
     '''
@@ -132,16 +135,15 @@ class PublicKraken:
         trading_pair = self.asset
         
         if not res['error']:
-            if trading_pair.upper() == 'BTCUSD':
-                return 'XXBTZUSD'
-                
             # check to see if 'trading_pair' is a list or not
             if type(trading_pair) == list:
                 # check to see if each 'trading_pair' is already a valid Kraken pair
                 new_pairs = []
                 for coin in trading_pair:
                     coin = coin.upper()
-                    if coin in res['result']:
+                    if coin == 'BTCUSD' or coin == 'BTC/USD':
+                        new_pairs.append('XXBTZUSD')
+                    elif coin in res['result']:
                         new_pairs.append(coin)
                     else:
                         # create a dictionary with all the trading pair/wsname pairs
@@ -161,7 +163,7 @@ class PublicKraken:
                         for pair in res['result']:
                             altdict[pair] = res['result'][pair]['altname']
 
-                        # create a list for the keys and the valuses of altdict
+                        # create a list for the keys and the values of altdict
                         altdictkeys = list(altdict.keys())
                         altdictvals = list(altdict.values())
 
@@ -184,8 +186,11 @@ class PublicKraken:
             # if it is not a list, perform the same logic and return the single Kraken pair
             else:
                 trading_pair = trading_pair.upper()
+                
+                if trading_pair == 'BTCUSD' or trading_pair == 'BTC/USD':
+                    return 'XXBTZUSD'
                 # check to see if 'trading_pair' is already a valid Kraken pair
-                if trading_pair in res['result']:
+                elif trading_pair in res['result']:
                     return trading_pair
                 else:
                     # create a dictionary with all the trading pair/wsname pairs
@@ -242,6 +247,58 @@ class PublicKraken:
         else:
             raise Exception({'kraken_error': f'Error Message: {message["error"]}'})
 
+    def get_wsname(self):
+        # function that will return the wsname of Kraken trading pair (if it exists)
+        '''
+        returns:
+            - wsname/list of wsnames of asset(s) provided in PublicKraken instantiation
+        '''
+        
+        url = 'https://api.kraken.com/0/public/AssetPairs'
+
+        message = requests.post(url).json()
+
+        pair = PublicKraken(self.asset).pair_matching()
+
+        wsname = []
+        if type(pair) == list:
+            for crypto in pair:
+                wsname.append(message['result'][crypto]['wsname'])
+        
+        else:
+            wsname = message['result'][pair]['wsname']
+
+        return wsname
+
+    def get_common_name(self):
+        # function that will return the common of Kraken trading pair (if it exists)
+        '''
+        returns:
+            - wsname/list of wsnames of asset(s) provided in PublicKraken instantiation
+        '''
+        
+        url = 'https://api.kraken.com/0/public/AssetPairs'
+
+        message = requests.post(url).json()
+
+        pair = PublicKraken(self.asset).pair_matching()
+
+        wsname = []
+        if type(pair) == list:
+            for crypto in pair:
+                if crypto == 'XXBTZUSD':
+                    wsname.append('BTC/USD')
+                else:
+                    wsname.append(message['result'][crypto]['wsname'])
+        
+        else:
+            if pair == 'XXBTZUSD':
+                wsname = 'BTC/USD'
+            else:
+                wsname = message['result'][pair]['wsname']
+
+        return wsname
+
     def get_pair_info(self, info='info'):
         '''
         args:
@@ -282,11 +339,21 @@ class PublicKraken:
         else:
             pair = self.asset
 
+        # the 'pair' name or list must be a string when sent as part of the request
+        pair_string = str()
+        if type(pair) == list:
+            for crypto in pair:
+                pair_string += ',' + crypto
+            pair_string = pair_string[1:]
+        
+        else:
+            pair_string = str(pair)
+
         # if pair and/or info is passed as an argument send that in the API request package
         if pair != None and info != 'info':
-            data = self.make_api_data(pair=pair, info=info)
+            data = self.make_api_data(pair=pair_string, info=info)
         elif pair != None and info == 'info':
-            data = self.make_api_data(pair=pair)
+            data = self.make_api_data(pair=pair_string)
         elif pair == None and info != 'info':
             data = self.make_api_data(info=info)
         else:
@@ -297,7 +364,7 @@ class PublicKraken:
 
         # return the result
         if not message['error']:
-            if len(pair) < 1:
+            if type(pair) == list:
                 return message['result']
             else:
                 return message['result'][pair]
@@ -761,7 +828,8 @@ class PublicKraken:
             time.sleep(3)
             is_cancellable = self.get_system_status()
 
-class PrivateKraken:a
+
+class PrivateKraken:
 
     def __init__(self, asset=None, userref=None):
         '''
@@ -1367,26 +1435,35 @@ class PrivateKraken:a
   
         if type(pair) == list:
             raise Exception({'input_error': 'Can only send one asset order at a time.'})
+        
+        # create a dictionary we can use to return all the messages to
+        orders = {}
 
-        # find the leverage level to use
-        leverage = self.get_open_positions(consolidation='market')['leverage']
+        # use a for loop to close multiple positions individually
+        for position in self.get_open_positions():
+            order_id = PrivateKraken('ethusd').get_open_positions()[position]['ordertxid']
+    
+            # find the leverage level to use
+            leverage = PrivateKraken().get_closed_orders()[order_id]['descr']['leverage'][0]
 
-        # if no volume supplied, close the entire position
-        if volume==None:
-            volume = self.get_open_positions(consolidation='market')['vol']
+            # if no volume supplied, close the entire position
+            if volume==None:
+                volume = self.get_open_positions()[position]['vol']
 
-        message = self.add_standard_order( 
-            side='buy', 
-            ordertype='market', 
-            volume=volume,
-            leverage=leverage,
-            oflags=oflags, 
-            start_time=start_time, 
-            expire_time=expire_time,
-            validate=validate
-        )
+            message = self.add_standard_order( 
+                side='buy', 
+                ordertype='market', 
+                volume=volume,
+                leverage=leverage,
+                oflags=oflags, 
+                start_time=start_time,
+                expire_time=expire_time,
+                validate=validate
+            )
 
-        return message
+            orders[position] = message
+
+        return orders
 
     def close_long_position(self, volume=None, oflags=None, start_time=None, expire_time=None, validate=False):
         # allows for you to close open leveraged long positions
@@ -1407,25 +1484,34 @@ class PrivateKraken:a
         if type(pair) == list:
             raise Exception({'input error': 'Can only send one asset order at a time.'})
 
-        # find the leverage level to use
-        leverage = self.get_open_positions(consolidation='market')['leverage']
+        # create a dictionary we can use to return all the messages to
+        orders = {}
 
-        # if no volume supplied, close the entire position
-        if volume==None:
-            volume = self.get_open_positions(consolidation='market')['vol']
+        # use a for loop to close multiple positions individually
+        for position in self.get_open_positions():
+            order_id = PrivateKraken('ethusd').get_open_positions()[position]['ordertxid']
+    
+            # find the leverage level to use
+            leverage = PrivateKraken().get_closed_orders()[order_id]['descr']['leverage'][0]
 
-        message = self.add_standard_order( 
-            side='sell', 
-            ordertype='market', 
-            volume=volume,
-            leverage=leverage,
-            oflags=oflags, 
-            start_time=start_time, 
-            expire_time=expire_time,
-            validate=validate
-        )
+            # if no volume supplied, close the entire position
+            if volume==None:
+                volume = self.get_open_positions()[position]['vol']
 
-        return message
+            message = self.add_standard_order( 
+                side='sell', 
+                ordertype='market', 
+                volume=volume,
+                leverage=leverage,
+                oflags=oflags, 
+                start_time=start_time,
+                expire_time=expire_time,
+                validate=validate
+            )
+
+            orders[position] = message
+
+        return orders
 
     def cancel_single_order(self, txid):
         '''
@@ -1479,6 +1565,7 @@ class PrivateKraken:a
         message = self.authenticate('Ledgers', data)
 
         return message
+
 
 class KrakenWS:
 
@@ -1647,6 +1734,85 @@ class KrakenWS:
 
         ws.close()
 
+    def guarantee_no_open_order(self, order_id=None):
+        # this function will connect to the websocket and pause any logic from running until either there are no open orders,
+        # or the order_id that is provided is no longer open
+        # see https://support.kraken.com/hc/en-us/articles/360034499452-WebSocket-API-private-feeds-openOrders for more info
+
+        # create the websocket token needed for authenticated access
+        token = self.get_ws_token()
+
+        # connect to the authenticated websocket
+        ws = websocket.create_connection('wss://ws-auth.kraken.com/')
+
+        # subscribe to the open orders authenticated websocket endpoint
+        payload = json.dumps({
+            'event': 'subscribe',
+            'subscription': {
+                'name': 'openOrders',
+                'token': token
+            }
+        })
+
+        # send the packet data to Kraken websocket
+        ws.send(payload)
+
+        # recieve the connection and subscription message, if no message raise an Exception
+        if not json.loads(ws.recv()):
+            raise Exception({'websocket_error': 'Error Message: Could not connect to channel'})
+
+        if not json.loads(ws.recv()):
+            raise Exception({'websocket_error': 'Error Message: Could not subscribe to channel'})
+
+        # loop through the responses until either: A) there are no open orders or, B) the provided order_id is no longer open
+        # instantiate initial loop condition and a list for tracking order_ids and dictionary for tracking order_status
+        loop = 1
+        list_of_orders = []
+        order_status = {}
+        while loop == 1:
+            
+            # save the response as a variable to call later on
+            orders = json.loads(ws.recv())
+
+            # if there are no orders initially, end the loop and close the websocket
+            if type(orders) == dict and orders['event'] == 'heartbeat':
+                continue
+            elif not orders[0]:
+                loop = 0
+            
+            # create a list of the order_ids to reference later
+            if type(orders) == list:
+                for order_data in orders[0]:
+                    for order in order_data:
+                        list_of_orders.append(order)
+
+            # track the status of each order_id in a dictionary
+            if type(orders) == list:
+                for order_data in orders[0]:
+                    for order in list_of_orders:
+                        try:
+                            order_status[order] = order_data[order]['status']
+                        except: KeyError
+            
+            # remove closed orders from order_status dictionary and list_of_orders
+            if len(order_status) > 0:
+                for order in list_of_orders:
+                    if order_status[order] != 'open':
+                        order_status.pop(order)
+                        while order in list_of_orders:
+                            list_of_orders.remove(order)
+
+            # end the loop and close the websocket if the either A) order_id = None AND the order_status dictionary is empty, or
+            # B) the order_status dictionary does not contain the order_id
+            if order_id != None:
+                if order_id not in order_status:
+                    loop = 0
+            elif not order_status:
+                loop = 0
+        
+        ws.close()
+
+
 class KrakenData:
 
     def __init__(self, asset=None):
@@ -1657,7 +1823,7 @@ class KrakenData:
             # https://support.kraken.com/hc/en-us/articles/360047543791-Downloadable-historical-market-data-time-and-sales-
         # folder_path is the folder that you download and save these files in
         # db_path is where you want the databse to be created and stored.
-        # Beware - if you use the entire dataset, the trade history will be around 20 GB and takes about 15-30 minutes to run
+        # Beware - if you use the entire dataset, the trade history will be around 12 GB and takes about 15-30 minutes to run and will only get bigger every quarter
         '''
         args:
             - folder_path = directory path where Kraken historical data is stored
@@ -1783,13 +1949,13 @@ class KrakenData:
             # since we already called the API once in the message call, we need to start our counter at 14 (plus this builds in a little leeway to guarantee we don't break the rules)
             call_count = max_calls - 1
 
-            # since we only get back the last 1000 trades, if the length of the df is less than 1000 then we are up to date
-            df_length = 1000
+            # since we only get back the last 1000 trades, if the length of the df is less than 1000 then we are up to date and we must track this length for the upcoming 'while' loop
+            df_length = len(df)
 
-            # Find the table name to update, which is the pair's altname.
+            # Find the table name to update, which is the pair's altname (if you used the .create_kraken_db() function above).
             table_name = PublicKraken(pair).get_pair_info()['altname']
 
-            # save a count variable to track the update process and then print it out
+            # save a count variable to track the update process and then print it out later
             count += 1
             progress = count/progress_tracker
             time_init = int(df.iloc[-1].name)
@@ -1846,4 +2012,3 @@ class KrakenData:
                 else:
                     print(f'Overall Progress = {int(progress * 100)}%    Current Asset = {table_name}    Current Asset Progress = {int((asset_progress) * 100)}%    Last Date = {last_date}')
         conn.close()
-
