@@ -674,7 +674,8 @@ class PublicKraken:
                 - Default is set to None and returns both buy and sell side leverage
 
         returns: 
-            - A dictionary or list of all available leverage options for that asset.
+            - A dictionary or list of all available leverage position sizes for that asset.
+                i.e. - {'buy': [2, 3, 4, 5], 'sell': [2, 3, 4, 5]}
         '''
         if side == None:
             leverage = {'buy': self.get_pair_info()['leverage_buy'], 'sell': self.get_pair_info()['leverage_buy']}
@@ -1880,11 +1881,10 @@ class KrakenData:
 
         data = data[['date', 'price', 'volume']]
 
-        df = data.resample(interval, on='date').agg({'price': 'ohlc', 'volume':'sum', 'date':'count'})
+        ohlcv = data.resample(interval, on='date').agg({'price': 'ohlc', 'volume':'sum', 'date':'count'})
 
-        ohlcv = df['price']
-        ohlcv['volume'] = df['volume']['volume']
-        ohlcv['trade_count'] = df['date']['date']
+        ohlcv.columns = ohlcv.columns.droplevel()
+        ohlcv.rename(columns={'date':'trade_count'}, inplace=True)
 
         # it is highly unlikely that the last entry will be a complete interval (i.e.- pulling the info in the middle of the 
         # day will only give a partial day for the last day) therefore we want to drop off the last entry for the returned dataframe
