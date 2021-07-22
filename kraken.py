@@ -2186,6 +2186,9 @@ class KrakenData:
             pair_list = [PublicKraken(self.asset).pair_matching()]
         else:
             pair_list = PublicKraken().get_asset_pairs()
+            for pair in  pair_list:
+                if '.d' in pair:
+                    pair_list.remove(pair)
 
         # we need to initiate a new call time.  this is to help track the number of Kraken API calls - for every three seconds after this, we add 1 more call to the call counter
         call_time = time.time()
