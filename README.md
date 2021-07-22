@@ -17,7 +17,7 @@ Current version = v0.3.2
 
       * Added a status bar to some of the data update functions to better help the user understand what stage the update is in.
 
-      * Added a `Math` class to make some commonly used functions available. 
+      * Added a `Math()` class to make some commonly used functions available. 
 
 * 04/08/2021 - released v0.3.2
     * release notes:
