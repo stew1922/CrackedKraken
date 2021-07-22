@@ -787,8 +787,14 @@ class PublicKraken:
         is_online = self.get_system_status()
 
         while is_online[0] != 'online':
-            print(f'System is in {is_online[0]} mode.  Time checked is {is_online[1]}')
-            time.sleep(3)
+            if is_online[0] == 'kraken_error':
+                print(f'Kraken Servers are unresponsive.  {is_online[1]}')
+                time.sleep(3)
+            else:
+                print(f'Kraken Servers are in {is_online[0]} mode.  Time checked is {is_online[1]}')
+                time.sleep(3)
+                is_online = self.get_system_status()
+
             is_online = self.get_system_status()
 
     def guarantee_limit(self):
@@ -798,12 +804,18 @@ class PublicKraken:
         '''
         # this function will check to see if the Kraken server is in an operational mode (either 'online' or 'post_only' or 'limit_only'), otherwise it will wait 3 seconds and then try again
         # the 3 second wait will ensure you do not exceed your API call limits
-        is_operational = self.get_system_status()
+        is_limit = self.get_system_status()
 
-        while is_operational[0] != 'online' or is_operational != 'post_only' or is_operational != 'limit_only':
-            print(f'System is in {is_operational[0]} mode.  Time checked is {is_operational[1]}')
-            time.sleep(3)
-            is_operational = self.get_system_status()
+        while is_limit[0] != 'online' or is_limit != 'post_only' or is_limit != 'limit_only':
+            if is_limit[0] == 'kraken_error':
+                print(f'Kraken Servers are unresponsive.  {is_limit[1]}')
+                time.sleep(3)
+            else:
+                print(f'Kraken Servers are in {is_limit[0]} mode.  Time checked is {is_limit[1]}')
+                time.sleep(3)
+                is_limit = self.get_system_status()
+
+            is_limit = self.get_system_status()
 
     def guarantee_cancel(self):
         '''
@@ -815,8 +827,14 @@ class PublicKraken:
         is_cancellable = self.get_system_status()
 
         while is_cancellable[0] == 'maintenance' or is_cancellable[0] == 'kraken_error':
-            print(f'System is in {is_cancellable[0]} mode.  Time checked is {is_cancellable[1]}')
-            time.sleep(3)
+            if is_cancellable[0] == 'kraken_error':
+                print(f'Kraken Servers are unresponsive.  {is_cancellable[1]}')
+                time.sleep(3)
+            else:
+                print(f'Kraken Servers are in {is_cancellable[0]} mode.  Time checked is {is_cancellable[1]}')
+                time.sleep(3)
+                is_cancellable = self.get_system_status()
+            
             is_cancellable = self.get_system_status()
 
     def guarantee_operational(self):
@@ -826,12 +844,18 @@ class PublicKraken:
         '''
         # this function will check to see if the Kraken server is in a cancel mode (either 'online' or 'post_only' or 'limit_only' or 'cancel_only'), otherwise it will wait 3 seconds and then try again
         # the 3 second wait will ensure you do not exceed your API call limits
-        is_cancellable = self.get_system_status()
+        is_operational = self.get_system_status()
 
-        while is_cancellable[0] == 'kraken_error':
-            print(f'System is in {is_cancellable[0]} mode.  Time checked is {is_cancellable[1]}')
-            time.sleep(3)
-            is_cancellable = self.get_system_status()
+        while is_operational[0] == 'kraken_error':
+            if is_operational[0] == 'kraken_error':
+                print(f'Kraken Servers are unresponsive.  {is_operational[1]}')
+                time.sleep(3)
+            else:
+                print(f'Kraken Servers are in {is_operational[0]} mode.  Time checked is {is_operational[1]}')
+                time.sleep(3)
+                is_operational = self.get_system_status()
+            
+            is_operational = self.get_system_status()
 
 
 class PrivateKraken:
