@@ -9,6 +9,16 @@ Current version = v0.3.2
 * [References](#References)
 
 ## Updates:
+* 07/22/2021 - realeased v0.3.3
+   * release notes:
+      * Updated the market orders to be more flexible:
+         * Can now input amount of quote currency desired to be purchased rather than just the volume of the asset (beware: this could potentially lead to multiple trades being filled in order to use up all the quote currency specified).
+         * Can now input `max_slippage` as an argument which will stop the market order from executing once the slippage has been reached.  This is only useful when utilizing the quote amount.
+
+      * Added a status bar to some of the data update functions to better help the user understand what stage the update is in.
+
+      * Added a `Math` class to make some commonly used functions available. 
+
 * 04/08/2021 - released v0.3.2
     * release notes:
         * Added new methods to `PublicKraken()` class:
