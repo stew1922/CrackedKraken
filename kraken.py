@@ -2282,3 +2282,14 @@ class KrakenData:
 
 
 class Math:
+
+    def __init__(self, asset=None):
+        self.asset = asset
+
+    def round_down(number, decimals):
+        multiplier = 10 ** decimals
+        return math.floor(number * multiplier) / multiplier
+
+    def round_up(number, decimals):
+        multiplier = 10 ** decimals
+        return math.ceil(number * multiplier) / multiplier
