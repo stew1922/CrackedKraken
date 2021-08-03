@@ -71,7 +71,7 @@ class PublicKraken:
         if not res['error']:
             return [res['result']['status'], res['result']['timestamp']]
         else:
-            raise Exception({'kraken_error': f"Error Message: {res['error']}"})
+            return ['kraken_error', f"Error Message: {res['error']}"]
 
     def make_api_data(self, asset=None, aclass=None, trades=None, userref=None, start=None, end=None, ofs=None, closetime=None, type=None, txid=None, consolidation=None, docalcs=None, pair=None, fee_info=None, ordertype=None, price=None, price2=None, volume=None, leverage=None, oflags=None, starttm=None, expiretm=None, validate=None, since=None, info=None, activity=None):
         # simple function that will create the 'data' dictionary that will be used to pass information into any api calls
@@ -783,16 +783,16 @@ class PublicKraken:
         '''
 
         # this function will check to see if the Kraken server is in 'online' mode, otherwise it will wait 3 seconds and then try again
-        # the 3 second wait will ensure you do not exceed your API call limits
+        # the 4 second wait will ensure you do not exceed your API call limits
         is_online = self.get_system_status()
 
         while is_online[0] != 'online':
             if is_online[0] == 'kraken_error':
                 print(f'Kraken Servers are unresponsive.  {is_online[1]}')
-                time.sleep(3)
+                time.sleep(4)
             else:
                 print(f'Kraken Servers are in {is_online[0]} mode.  Time checked is {is_online[1]}')
-                time.sleep(3)
+                time.sleep(4)
                 is_online = self.get_system_status()
 
             is_online = self.get_system_status()
@@ -802,17 +802,17 @@ class PublicKraken:
         This is a function that will run an infinte loop until the server allows at least limit orders.
             *WARNING: this function does not guarantee all order types.  If you need to place an order (especially a market order) utilize the 'guarantee_online' function
         '''
-        # this function will check to see if the Kraken server is in an operational mode (either 'online' or 'post_only' or 'limit_only'), otherwise it will wait 3 seconds and then try again
-        # the 3 second wait will ensure you do not exceed your API call limits
+        # this function will check to see if the Kraken server is in an operational mode (either 'online' or 'post_only' or 'limit_only'), otherwise it will wait 4 seconds and then try again
+        # the 4 second wait will ensure you do not exceed your API call limits
         is_limit = self.get_system_status()
 
         while is_limit[0] != 'online' or is_limit != 'post_only' or is_limit != 'limit_only':
             if is_limit[0] == 'kraken_error':
                 print(f'Kraken Servers are unresponsive.  {is_limit[1]}')
-                time.sleep(3)
+                time.sleep(4)
             else:
                 print(f'Kraken Servers are in {is_limit[0]} mode.  Time checked is {is_limit[1]}')
-                time.sleep(3)
+                time.sleep(4)
                 is_limit = self.get_system_status()
 
             is_limit = self.get_system_status()
@@ -822,17 +822,17 @@ class PublicKraken:
         This is a function that will run an infinte loop until the server is in a cancelable state.
             *WARNING: this will not guarantee a mode that allows order placing, rather it only guarantees order cancelling.
         '''
-        # this function will check to see if the Kraken server is in a cancel mode (either 'online' or 'post_only' or 'limit_only' or 'cancel_only'), otherwise it will wait 3 seconds and then try again
-        # the 3 second wait will ensure you do not exceed your API call limits
+        # this function will check to see if the Kraken server is in a cancel mode (either 'online' or 'post_only' or 'limit_only' or 'cancel_only'), otherwise it will wait 4 seconds and then try again
+        # the 4 second wait will ensure you do not exceed your API call limits
         is_cancellable = self.get_system_status()
 
         while is_cancellable[0] == 'maintenance' or is_cancellable[0] == 'kraken_error':
             if is_cancellable[0] == 'kraken_error':
                 print(f'Kraken Servers are unresponsive.  {is_cancellable[1]}')
-                time.sleep(3)
+                time.sleep(4)
             else:
                 print(f'Kraken Servers are in {is_cancellable[0]} mode.  Time checked is {is_cancellable[1]}')
-                time.sleep(3)
+                time.sleep(4)
                 is_cancellable = self.get_system_status()
             
             is_cancellable = self.get_system_status()
@@ -842,17 +842,17 @@ class PublicKraken:
         This is a function that will run an infinte loop until the server is in a operational state.
             *WARNING: this will not guarantee a mode that allows order placing, rather it only guarantees that the server is responsive.
         '''
-        # this function will check to see if the Kraken server is in a cancel mode (either 'online' or 'post_only' or 'limit_only' or 'cancel_only'), otherwise it will wait 3 seconds and then try again
-        # the 3 second wait will ensure you do not exceed your API call limits
+        # this function will check to see if the Kraken server is in a cancel mode (either 'online' or 'post_only' or 'limit_only' or 'cancel_only'), otherwise it will wait 4 seconds and then try again
+        # the 4 second wait will ensure you do not exceed your API call limits
         is_operational = self.get_system_status()
 
         while is_operational[0] == 'kraken_error':
             if is_operational[0] == 'kraken_error':
                 print(f'Kraken Servers are unresponsive.  {is_operational[1]}')
-                time.sleep(3)
+                time.sleep(4)
             else:
                 print(f'Kraken Servers are in {is_operational[0]} mode.  Time checked is {is_operational[1]}')
-                time.sleep(3)
+                time.sleep(4)
                 is_operational = self.get_system_status()
             
             is_operational = self.get_system_status()
@@ -1341,7 +1341,11 @@ class PrivateKraken:
         elif volume == None and quote_amount != None:
             # create a loop that goes through the order book until there is no quote_amount left
             min_order_usd = 10
-            quote_amount_left = quote_amount
+            if leverage != None:
+                quote_amount_left = quote_amount
+            else:
+                quote_amount_left = Math.round_down(quote_amount * leverage, 2)
+                
             initial_ask = float(PublicKraken(self.asset).get_current_ask()[0])
 
             while quote_amount_left >= min_order_usd:
@@ -1369,6 +1373,7 @@ class PrivateKraken:
                 # if the current order reduces the 'quote_amount_left' to less than $10 USD, then we need to end the loop 
                 # as Kraken will reject any order less than $10 USD
                 quote_amount_left -= (order_volume * ask_price)
+                quote_amount_left = Math.round_down(quote_amount_left, 2)
 
                 # create the market order using the order_volume
                 message = PrivateKraken(self.asset).add_standard_order(
@@ -1381,8 +1386,11 @@ class PrivateKraken:
                     expire_time=expire_time, 
                     validate=validate
                 )
+                
+                print(f'Asset Price: {Math.round_down(ask_price, 2)}, Asset Volume: {Math.round_down(ask_volume, 2)}, Total Value: {Math.round_down(ask_value, 2)}')
 
-                print(f'Asset Price: {ask_value}, Asset Volume: {ask_volume}, Total Value: {ask_value}')
+                return message
+
                     
 
         # otherwise make a standard market order with the asset volume
@@ -1429,7 +1437,10 @@ class PrivateKraken:
         elif volume == None and quote_amount != None:
             # create a loop that goes through the order book until there is no quote_amount left
             min_order_usd = 10
-            quote_amount_left = quote_amount
+            if leverage != None:
+                quote_amount_left = quote_amount
+            else:
+                quote_amount_left = Math.round_down(quote_amount * leverage, 2)
             initial_bid = float(PublicKraken(self.asset).get_current_bid()[0])
 
             while quote_amount_left >= min_order_usd:
@@ -1457,6 +1468,7 @@ class PrivateKraken:
                 # if the current order reduces the 'quote_amount_left' to less than $10 USD, then we need to end the loop 
                 # as Kraken will reject any order less than $10 USD
                 quote_amount_left -= (order_volume * bid_price)
+                quote_amount_left = Math.round_down(quote_amount_left, 2)
 
                 # create the market order using the order_volume
                 message = PrivateKraken(self.asset).add_standard_order(
@@ -1469,8 +1481,11 @@ class PrivateKraken:
                     expire_time=expire_time, 
                     validate=validate
                 )
+                
+                print(f'Asset Price: {Math.round_down(bid_price, 2)}, Asset Volume: {Math.round_down(bid_volume, 2)}, Total Value: {Math.round_down(bid_value, 2)}')    
 
-                print(f'Asset Price: {bid_value}, Asset Volume: {bid_volume}, Total Value: {bid_value}')    
+                return message
+
 
         # otherwise make a standard market order with the asset volume
         else:
@@ -1581,27 +1596,25 @@ class PrivateKraken:
 
         # use a for loop to close multiple positions individually
         for position in self.get_open_positions():
-            order_id = PrivateKraken('ethusd').get_open_positions()[position]['ordertxid']
-    
-            # find the leverage level to use
-            leverage = PrivateKraken().get_closed_orders()[order_id]['descr']['leverage'][0]
+            if self.get_open_positions()[position]['type'] == 'sell':
+                order_id = PrivateKraken('ethusd').get_open_positions()[position]['ordertxid']
+        
+                # find the leverage level to use
+                leverage = PrivateKraken().get_closed_orders()[order_id]['descr']['leverage'][0]
 
-            # if no volume supplied, close the entire position
-            if volume==None:
-                volume = self.get_open_positions()[position]['vol']
+                # if no volume supplied, close the entire position
+                # if any of the position has already been closed, then you need to subtract it out from the total
+                if volume==None:
+                    if float(self.get_open_positions()[position]['vol_closed']) > 0:
+                        volume = float(self.get_open_positions()[position]['vol']) - float(self.get_open_positions()[position]['vol_closed'])
+                    else:
+                        volume = float(self.get_open_positions()[position]['vol'])
 
-            message = self.add_standard_order( 
-                side='buy', 
-                ordertype='market', 
-                volume=volume,
-                leverage=leverage,
-                oflags=oflags, 
-                start_time=start_time,
-                expire_time=expire_time,
-                validate=validate
-            )
-
-            orders[position] = message
+                orders[position] = self.market_buy(
+                    volume=volume,
+                    leverage=leverage,
+                    validate=validate
+                )
 
         return orders
 
@@ -1629,27 +1642,25 @@ class PrivateKraken:
 
         # use a for loop to close multiple positions individually
         for position in self.get_open_positions():
-            order_id = PrivateKraken('ethusd').get_open_positions()[position]['ordertxid']
-    
-            # find the leverage level to use
-            leverage = PrivateKraken().get_closed_orders()[order_id]['descr']['leverage'][0]
+            if self.get_open_positions()[position]['type'] == 'buy':
+                order_id = PrivateKraken('ethusd').get_open_positions()[position]['ordertxid']
+        
+                # find the leverage level to use
+                leverage = PrivateKraken().get_closed_orders()[order_id]['descr']['leverage'][0]
 
-            # if no volume supplied, close the entire position
-            if volume==None:
-                volume = self.get_open_positions()[position]['vol']
+                # if no volume supplied, close the entire position
+                # if any of the position has already been closed, then you need to subtract it out from the total
+                if volume==None:
+                    if float(self.get_open_positions()[position]['vol_closed']) > 0:
+                        volume = float(self.get_open_positions()[position]['vol']) - float(self.get_open_positions()[position]['vol_closed'])
+                    else:
+                        volume = float(self.get_open_positions()[position]['vol'])
 
-            message = self.add_standard_order( 
-                side='sell', 
-                ordertype='market', 
-                volume=volume,
-                leverage=leverage,
-                oflags=oflags, 
-                start_time=start_time,
-                expire_time=expire_time,
-                validate=validate
-            )
-
-            orders[position] = message
+                orders[position] = self.market_sell(
+                    volume=volume,
+                    leverage=leverage,
+                    validate=validate
+                )
 
         return orders
 
@@ -2140,7 +2151,7 @@ class KrakenData:
         # close the connection after the tables are built
         conn.close()
 
-    def ohlcv_df(self, interval, db_path, start_time=None):
+    def ohlcv_df(self, interval, db_path, start_time=None, end_time=None):
         # takes a crypto trading pair and time interval and returns an OHLC database
 
         pair = PublicKraken(self.asset).pair_matching()
@@ -2148,9 +2159,16 @@ class KrakenData:
 
         conn = sqlite3.connect(db_path)
 
-        if start_time is not None:
+        if start_time != None and end_time == None:
             start_time = int(datetime.timestamp(pd.to_datetime(start_time, utc=True)))
             query = f'SELECT * FROM {pair} WHERE timestamp >= {start_time}'
+        elif start_time == None and end_time != None:
+            end_time = int(datetime.timestamp(pd.to_datetime(end_time, utc=True)))
+            query = f'SELECT * FROM {pair} WHERE timestamp <= {end_time}'
+        elif start_time != None and end_time != None:
+            start_time = int(datetime.timestamp(pd.to_datetime(start_time, utc=True)))
+            end_time = int(datetime.timestamp(pd.to_datetime(end_time, utc=True)))
+            query = f'SELECT * FROM {pair} WHERE timestamp >= {start_time} AND timestamp <= {end_time}'
         else:
             query = f'SELECT * FROM {pair}'
 
@@ -2168,9 +2186,7 @@ class KrakenData:
         ohlcv.columns = ohlcv.columns.droplevel()
         ohlcv.rename(columns={'date':'trade_count'}, inplace=True)
 
-        # it is highly unlikely that the last entry will be a complete interval (i.e.- pulling the info in the middle of the 
-        # day will only give a partial day for the last day) therefore we want to drop off the last entry for the returned dataframe
-        return ohlcv.iloc[:-1]
+        return ohlcv
 
     def trades_df(self, db_path, pair=None, start_time=None):
         # takes a crypto trading pair and returns an trades database on a tick by tick basis
