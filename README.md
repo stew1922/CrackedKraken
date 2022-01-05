@@ -1,6 +1,6 @@
 # CrackedKraken
 Repository for using Kraken's Public and Private APIs  
-Current version = v0.3.3
+Current version = v0.3.4
 
 ## Table of Contents
 * [Updates](#Updates)
