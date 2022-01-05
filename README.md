@@ -89,7 +89,7 @@ Current version = v0.3.4
 
     from kraken import KrakenData
     folder_path = 'C:/folder_path'     # this is the folder or directory where the downloaded Kraken history is saved.
-    db_path = 'C:/db_path'     # this is the folder/location you would like the database to be saved - you will need upwards of 15 GB of space.
+    db_path = 'C:/db_path'     # this is the folder/location you would like the database to be saved - you will need upwards of 30 GB of space for the entire Kraken trading history.
 
     KrakenData().create_kraken_db(folder_path, db_path)
 
