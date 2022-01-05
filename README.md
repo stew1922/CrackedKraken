@@ -9,7 +9,13 @@ Current version = v0.3.3
 * [References](#References)
 
 ## Updates:
-* 07/22/2021 - realeased v0.3.3
+* 01/05/2022 - released v0.3.4
+  * release notes:
+    * Updated the KrakenData().ohlcv() method
+      * Can now input multiple assets
+      * Now returns a multi-index dataframe - both when inputting just one or multiple assets
+
+* 07/22/2021 - released v0.3.3
    * release notes:
       * Updated the market orders to be more flexible:
          * Can now input amount of quote currency desired to be purchased rather than just the volume of the asset (beware: this could potentially lead to multiple trades being filled in order to use up all the quote currency specified).
