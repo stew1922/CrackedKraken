@@ -11,7 +11,7 @@ Current version = v0.3.3
 ## Updates:
 * 01/05/2022 - released v0.3.4
   * release notes:
-    * Updated the KrakenData().ohlcv() method
+    * Updated the `KrakenData().ohlcv()` method
       * Can now input multiple assets
       * Now returns a multi-index dataframe - both when inputting just one or multiple assets
 
