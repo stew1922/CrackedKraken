@@ -9,7 +9,7 @@ Current version = v0.3.4
 * [References](#References)
 
 ## Updates:
-* 01/11/2022 - fixed bug with KrakenData().update_db() that was not adding new assets as they began trading on Kraken (i.e.- 1INCH and SOL)
+* 01/11/2022 - fixed bug with `KrakenData().update_db()` that was not adding new assets as they began trading on Kraken (i.e.- 1INCH and SOL)
 
 * 01/05/2022 - released v0.3.4
   * release notes:
